@@ -48,13 +48,13 @@
     let region;
     //Function to create buttons for each region
     function populateRegions(data) {
-        for (let i = 0; i < data.length; i++) {
+        for (let i = 0; i < data.regions.length; i++) {
             let button = document.createElement("button");
             button.type = "button";
             button.onclick = "sendRegion(this);";
             button.class = "btn btn-primary";
-            button.id = data[i];
-            button.innerHTML = data[i];
+            button.id = data.regions[i];
+            button.innerHTML = data.regions[i];
             $("#regions").appendChild(button);
         }
     }
@@ -82,6 +82,23 @@
                 $("#venues").style.display = "none";
                 populateRegions(data);
                 $("#regions").style.display = "block";
+            }
+        });
+    }
+    //Function to send region to server
+    /*
+    RETRIEVES MEETINGS FROM SERVER
+    */
+    function sendRegion(button) {
+        var region = button.id;
+        $.ajax({
+            url: "{% url 'picker:picker' day=day venue=venue region=region %}",
+            type: "GET",
+            data: None,
+            success: function(data) {
+                $("#regions").style.display = "none";
+                $("#meetings").innerHTML = data.meetings;
+                $("#meetings").style.display = "block";
             }
         });
     }
