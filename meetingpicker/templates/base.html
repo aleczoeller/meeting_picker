@@ -1,0 +1,91 @@
+{% load static %}
+{% csrf_token %}
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <title>{% block title %}Meeting Picker{% endblock title %}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="NA Meeting Picker">
+    <meta name="author" content="Alec Zoeller">
+    {% block css %}
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+    {% endblock %}
+
+    {% block javascript %}
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    
+    {% endblock %}
+  </head>
+  
+  <body>
+    <container>
+        {% block content %}
+        <div id="days" display="block">
+            <% for day in entries.days %>
+                <button type="button" onclick="sendDay(this);" class="btn btn-primary" id="{{ day }}">{{ day }}</button>
+            <% endfor %>
+        </div>
+        <div id="venues" display="none">
+            <button type="button" onclick="sendVenue(this);" class="btn btn-primary" id="online">ONLINE</button>
+            <button type="button" onclick="sendVenue(this);" class="btn btn-primary" id="in-person">IN PERSON</button>
+        </div>
+        <div id="regions" display="none">
+        </div>
+        <div id="meetings" display="none">
+        </div>
+        {% endblock %}
+    </container>
+
+
+
+  <script>
+    //Define parameters to update/populate as we go
+    let day;
+    let venue;
+    let region;
+    //Function to create buttons for each region
+    function populateRegions(data) {
+        for (let i = 0; i < data.length; i++) {
+            let button = document.createElement("button");
+            button.type = "button";
+            button.onclick = "sendRegion(this);";
+            button.class = "btn btn-primary";
+            button.id = data[i];
+            button.innerHTML = data[i];
+            $("#regions").appendChild(button);
+        }
+    }
+    //Function to send day to server
+    function sendDay(button) {
+        var day = button.id;
+        $.ajax({
+            url: "{% url 'picker:picker' day=day venue='' region='' %}",
+            type: "GET",
+            data: None,
+            success: function(data) {
+                $("#days").style.display = "none";
+                $("#venues").style.display = "block";
+            }
+        });
+    }
+    //Function to send venue to server
+    function sendVenue(button) {
+        var venue = button.id;
+        $.ajax({
+            url: "{% url 'picker:picker' day=day venue=venue region='' %}",
+            type: "GET",
+            data: None,
+            success: function(data) {
+                $("#venues").style.display = "none";
+                populateRegions(data);
+                $("#regions").style.display = "block";
+            }
+        });
+    }
+    //TODO Create sendRegion() function
+    //TODO Create custom css for table on mobile devices
+  </script>
+  </body>
