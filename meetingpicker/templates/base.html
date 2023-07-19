@@ -6,82 +6,176 @@
   <head>
     <meta charset="utf-8">
     <meta http-equiv="x-ua-compatible" content="ie=edge">
-    <title>{% block title %}Meeting Picker{% endblock title %}</title>
+    <title>{% block title %}Meeting Picker{% endblock %}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="NA Meeting Picker">
     <meta name="author" content="Alec Zoeller">
     {% block css %}
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+    <link rel="stylesheet" type="text/css" href="{% static 'modstyles.css' %}">   
     {% endblock %}
 
     {% block javascript %}
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
-    
     {% endblock %}
   </head>
   
   <body>
-    <container>
-        {% block content %}
-        <div id="days" display="block">
-            <% for day in entries.days %>
-                <button type="button" onclick="sendDay(this);" class="btn btn-primary" id="{{ day }}">{{ day }}</button>
-            <% endfor %>
+    {% block body %}
+    <container style="padding-top:10px;">
+        <div class="alert alert-info" role="alert" style="font-size:14pt;">
+            <strong>Find a Meeting</strong>
+            <button id="goback" style="display:none; right:6px;" type="button"
+                class=""btn btn-warning" onclick="goBack()">Go Back</button>
         </div>
-        <div id="venues" display="none">
-            <button type="button" onclick="sendVenue(this);" class="btn btn-primary" id="online">ONLINE</button>
-            <button type="button" onclick="sendVenue(this);" class="btn btn-primary" id="in-person">IN PERSON</button>
+        <div id="days" class="div-container">
+            {% for day in days %}
+                <button style="margin:10px;" type="button" onclick="sendDay(this)" class="btn btn-lg btn-primary" id="{{ day }}">{{ day }}</button>
+            {% endfor %}
         </div>
-        <div id="regions" display="none">
+        <div id="venues" class="div-container" style="display:none;">
+            <button style="margin:10px;" type="button" onclick="sendVenue(this)" class="btn btn-lg btn-primary" id="online">ONLINE</button>
+            <button style="margin:10px;" type="button" onclick="sendVenue(this)" class="btn btn-lg btn-primary" id="in-person">IN PERSON</button>
         </div>
-        <div id="meetings" display="none">
+        <div id="regions" class="div-container" style="display:none;">
         </div>
-        {% endblock %}
+        <div id="meetings" style="display:none;">
+        </div>
+        <div id="dummy" style="display:none;">
+        </div>
+        
     </container>
-
-
+    {% endblock %}
 
   <script>
     //Define parameters to update/populate as we go
     let day;
     let venue;
     let region;
+    var base_url = window.location.origin;
     //Function to create buttons for each region
-    function populateRegions(data) {
+    function populateRegions(data, day, venue) {
+        var regions = document.getElementById("regions");
         for (let i = 0; i < data.regions.length; i++) {
             let button = document.createElement("button");
             button.type = "button";
-            button.onclick = "sendRegion(this);";
-            button.class = "btn btn-primary";
+            button.setAttribute("onclick", "sendRegion(this, '" + day + "', '" + venue + "')");
+            button.setAttribute("class", "btn btn-lg btn-primary");
             button.id = data.regions[i];
             button.innerHTML = data.regions[i];
-            $("#regions").appendChild(button);
+            regions.appendChild(button);
         }
+    }
+    // generate mobile version for each table
+    function formatTable(table) {
+        document.getElementById("dummy").innerHTML = table;
+        var table = document.getElementById("mtgs");
+        var head = [];
+        var rows = [];
+        for (var i=0; i< table.tHead.children[0].cells.length; i++) {
+            head.push(table.tHead.children[0].cells[i].textContent);
+        }
+        for (var i=0; i < table.rows.length; i++) {
+            var this_row = [];
+            for (var j=0; j < table.rows[i].cells.length; j++) {
+                this_row.push(table.rows[i].cells[j].innerHTML);
+            }
+            rows.push(this_row);
+        }
+        // create new table
+        var newtable = document.createElement("TABLE");
+        newtable.setAttribute("class", "generated_for_mobile");
+        newtable.createTBody();
+        // cache tbody where we'll be adding data
+        var newtable_tbody = newtable.tBodies[0];
+        let cont;
+        let new_content;
+        for (var i=1; i<rows.length; i++) {
+            var classname = i % 2 ? 'even' : 'odd';
+            
+            for (var j=0; j<rows[i].length; j++) { 
+                
+                if ((rows[i][j] != "") & (rows[i][j] != null) & (j != 5))   {  //Exclude blank cells and "duration" cells
+
+                    var new_tr = newtable.tBodies[0].insertRow();    
+                    var new_td = new_tr.insertCell();
+                    if (j == 4) {  // Merge start time and duration values
+                        cont = rows[i][j] + ", " + rows[i][j+1] + " hours";
+                    }   else if (j == 1)    {  //Add label to meeting name
+                        cont = "MEETING NAME: " + rows[i][j];
+                    }   else {
+                        cont = rows[i][j].replace('&lt;','<').replace('&gt;','>');
+                    }
+                    if ((j != 2) & (j != 3)) {
+                        new_content = document.createTextNode(cont);
+                    }   else { //Virtual meeting link information needs a non-text node in the DOM
+                        new_content = document.createElement("div");
+                        new_content.innerHTML = cont;
+                    }
+                    new_td.appendChild(new_content);
+                    new_td.setAttribute("class", classname);
+                    newtable_tbody.appendChild(new_tr);
+                }
+            }                  
+        }
+        document.getElementById("dummy").innerHTML = "";
+        newtable.setAttribute("class", "table table-striped table-bordered table-hover");
+        /*
+        newtable.innerHTML = newtable.innerHTML.replace('<','&lt;').replace('>','&gt;')
+        meetingBlock = document.getElementById("meetings");
+        meetingBlock.appendChild(newtable);
+        */
+       console.log(newtable.outerHTML);
+       var st_output = '<table class="table table-striped table-bordered table-hover">' + 
+                        newtable.innerHTML.replace('&lt;','<').replace('&gt;','>')
+                            .replace('<tbody>','').replace('</tbody>', '') +
+                        '</table';
+       return st_output;
     }
     //Function to send day to server
     function sendDay(button) {
         var day = button.id;
+        console.log('Sending day: ' + day);
         $.ajax({
-            url: "{% url 'picker:picker' day=day venue='' region='' %}",
+            url: base_url + "/" + day + "/nan/nan/",
             type: "GET",
-            data: None,
+            data: null,
             success: function(data) {
-                $("#days").style.display = "none";
-                $("#venues").style.display = "block";
+                $("#days").css("display", "none");
+                $("#venues").data("day", day);
+                $("#venues").css("display", "grid");
+                $("#goback").css("display", "inline");
+            }
+        });
+    }
+    //Function to start the process over
+    function goBack()   {
+        $.ajax({
+            url: base_url + "/nan/nan/nan/",
+            type: "GET",
+            data: null,       
+            success: function(data) {
+                $("#days").css("display", "grid");
+                $("#venues").css("display", "none");
+                $("#regions").css("display", "none");
+                $("#meetings").css("display", "none");
+                $("#goback").css("display", "none");
             }
         });
     }
     //Function to send venue to server
     function sendVenue(button) {
         var venue = button.id;
+        day = $("#venues").data("day");
+        console.log("Day:" + day);
         $.ajax({
-            url: "{% url 'picker:picker' day=day venue=venue region='' %}",
+            url: base_url + "/" + day + "/" + venue + "/nan/",
             type: "GET",
-            data: None,
+            data: null,
             success: function(data) {
-                $("#venues").style.display = "none";
-                populateRegions(data);
-                $("#regions").style.display = "block";
+                $("#venues").css("display", "none");
+                populateRegions(data, day, venue);
+                $("#regions").css("display", "grid");
             }
         });
     }
@@ -89,20 +183,24 @@
     /*
     RETRIEVES MEETINGS FROM SERVER
     */
-    function sendRegion(button) {
+    function sendRegion(button, day, venue) {
         var region = button.id;
+        console.log("Region URL:" + base_url + "/" + day + "/" + venue + "/" + region + "/");
         $.ajax({
-            url: "{% url 'picker:picker' day=day venue=venue region=region %}",
+            url: base_url + "/" + day + "/" + venue + "/" + region + "/",
             type: "GET",
-            data: None,
+            data: null,
             success: function(data) {
-                $("#regions").style.display = "none";
-                $("#meetings").innerHTML = data.meetings;
-                $("#meetings").style.display = "block";
+                $("#regions").css("display", "none");
+                //formatTable(data.meetings);  //Uncomment to set table from method (no return)
+                mtgs = document.getElementById("meetings");
+                mtgs.innerHTML = formatTable(data.meetings);
+                mtgs.setAttribute("style", "display:block;");
             }
         });
     }
-    //TODO Create sendRegion() function
-    //TODO Create custom css for table on mobile devices
+
   </script>
+
   </body>
+</html>

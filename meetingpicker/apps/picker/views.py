@@ -8,13 +8,15 @@ from typing import List, Union
 import geopandas as gp
 import MySQLdb as mysql
 from django.http import HttpResponse, JsonResponse
-from django.views.generic import View
+from django.shortcuts import render
+from django.views.generic import ListView
 from dotenv import load_dotenv, find_dotenv
 from shapely.geometry import Point
 
-from utils.queries import (meeting_data_query,
-							meeting_main_query,
-							meeting_format_query,)
+from meetingpicker.utils.queries import (meeting_data_query,
+		 								meeting_main_query,
+		 								meeting_format_query,)
+from meetingpicker.apps.picker.models import PickerModel
 
 
 #Filter pandas warning about using a mysql connection directly
@@ -24,7 +26,7 @@ warnings.filterwarnings('ignore', category=UserWarning)
 #Load environment variables from file (db connection parameters)
 load_dotenv(find_dotenv('../.env'), override=True)
 
-REGION_FILE = '../static/regions.shp'
+REGION_FILE = 'static/regions.shp'
 DAYS = {
 		i:j for i, j in zip([*range(7)], 
 		['MONDAY', 'TUESDAY', 'WEDNESDAY',
@@ -37,7 +39,7 @@ PASSWORD = getenv('PASSWORD', None)
 HOSTNAME = getenv('HOSTNAME', None)
 DB = getenv('DBNAME', None)
 
-MEETING_DETAIL_COLS = [ 'id_biginxt',
+MEETING_DETAIL_COLS = [ 'id_bigint',
 						'Meeting Name',
 						'Virtual Meeting Link',
 						'Virtual Meeting Additional Info',
@@ -63,6 +65,17 @@ MEETING_MAIN_COLS = ['id_bigint',
                      'Formats',
                      'Longitude',
                      'Latitude']
+
+# Rules for sorting tables 
+today = datetime.today()
+weekday = calendar.weekday(today.year, today.month, today.day) 
+start_list = list(range(weekday, 7, 1))
+end_list = list(range(0, weekday))
+day_list = start_list + end_list 
+day_names = [DAYS[i] for i in day_list]
+day_list = [*range(7)]
+DAYS_ORDERED = {i:j for i, j in zip(day_names, day_list)}
+
 
 
 class ProcessingError(Exception):
@@ -107,42 +120,59 @@ def format_table(mtgs:pd.DataFrame) -> str:
 	mtgs.fillna('', inplace=True)
 	for col in mtgs:
 		mtgs[col] = mtgs[col].astype(str)
-	mtgs['Virtual'] = mtgs.apply(lambda x: '\n'.join(filter(None, [
-			'<a href="' + 
-			x['Virtual Meeting Link'] +
-			'">' + 
-			'Click to Join Meeting' +
-			'</a>',
-			x['Phone Meeting Dial-in Number'] if not \
-				x['Phone Meeting Dial-in Number'] == '' else None,
-			x['Virtual Meeting Additional Info'] if not \
-				x['Virtual Meeting Additional Info'] == '' else None])), axis=1)
-	mtgs['Virtual'] = mtgs['Virtual'].apply(lambda x: x.replace('<a href=""></a>', ''))
-	# Create cleaned location column for display purposes
-	mtgs['Location'] = mtgs.apply(lambda x: '\n'.join(filter(None, [
-			x['Location Name'].strip() if not x['Location Name'].strip() == '' else None,
-			x['Street Address'].strip() if not x['Street Address'].strip() == '' else None,
-			', '.join(filter(None, [  # Filter out empty strings
-				x['Neighborhood'].strip() if not x['Neighborhood'].strip() == '' else None,
-				x['Town'].strip() if not x['Town'].strip() == '' else None,
-				x['Borough'].strip() if not x['Borough'].strip() == '' else None,
-				x['County'].strip() if not x['County'].strip() == '' else None,
-				x['Zip Code'].strip() if not x['Zip Code'].strip() == '' else None,
-				x['Nation'].strip() if not x['Nation'].strip() == '' else None])),
-			x['Additional Location Information'].strip() if not \
-				x['Additional Location Information'].strip() == '' else None,
-			x['Comments'].strip() if not x['Comments'].strip() == '' else None,
-			x['Bus Lines'].strip() if not x['Bus Lines'].strip() == '' else None,
-			x['Train Lines'].strip() if not x['Train Lines'].strip() == '' else None])
-			), axis=1)
+	mtgs['Virtual'] = ''
+	mtgs['Location'] = ''
+	if not len(mtgs) == 0:
+		mtgs['Virtual'] = mtgs.apply(lambda x: '<br>'.join(filter(None, [
+				'<a href="' + 
+				x['Virtual Meeting Link'] +
+				'">' + 
+				'Click to Join Meeting' +
+				'</a>',
+				x['Phone Meeting Dial-in Number'] if not \
+					x['Phone Meeting Dial-in Number'] == '' else None,
+				x['Virtual Meeting Additional Info'] if not \
+					x['Virtual Meeting Additional Info'] == '' else None])), axis=1)
+		mtgs['Virtual'] = mtgs['Virtual'].apply(lambda x: x.replace('<a href="">Click to Join Meeting</a>', ''))
+		# Create cleaned location column for display purposes
+		mtgs['Location'] = mtgs.apply(lambda x: '<br>'.join(filter(None, [
+				x['Location Name'].strip() if not x['Location Name'].strip() == '' else None,
+				x['Street Address'].strip() if not x['Street Address'].strip() == '' else None,
+				', '.join(filter(None, [  # Filter out empty strings
+					x['Neighborhood'].strip() if not x['Neighborhood'].strip() == '' else None,
+					x['Town'].strip() if not x['Town'].strip() == '' else None,
+					x['Borough'].strip() if not x['Borough'].strip() == '' else None,
+					x['County'].strip() if not x['County'].strip() == '' else None,
+					x['Zip Code'].strip() if not x['Zip Code'].strip() == '' else None,
+					x['Nation'].strip() if not x['Nation'].strip() == '' else None])),
+				x['Additional Location Information'].strip() if not \
+					x['Additional Location Information'].strip() == '' else None,
+				x['Comments'].strip() if not x['Comments'].strip() == '' else None,
+				x['Bus Lines'].strip() if not x['Bus Lines'].strip() == '' else None,
+				x['Train Lines'].strip() if not x['Train Lines'].strip() == '' else None])
+				), axis=1)
 	# Limit columns to "for display" only
 	mtgs = mtgs[['Day', 'Meeting Name', 'Virtual', 'Location', 
 	      		 'Start Time', 'Duration', 'Formats']]
 	#Format Table as HTML table for display
-	mtgs = mtgs.to_html(classes='table table-striped table-bordered table-hover',
+	mtgs = mtgs.to_html(classes='table table-striped table-bordered table-hover', table_id='mtgs',
 		     			index=False, escape=False, render_links=True)	
+	with open('mtgs.html', 'w', encoding='utf-8') as f:
+		f.write(mtgs)
 	return mtgs
+
 	
+def sort_on_day(series:pd.Series) -> pd.Series:
+	"""Sort a series of days in order of the week, starting with the current day.
+
+	Args:
+		series (pd.Series): Pandas series
+
+	Returns:
+		pd.Series: Pandas series, sorted
+	"""
+	return series.apply(lambda x: DAYS_ORDERED.get(x, 9999))
+
 
 def get_meeting_data(online:bool = False) -> pd.DataFrame:
 	"""Return all meeting information. 
@@ -173,9 +203,12 @@ def get_meeting_data(online:bool = False) -> pd.DataFrame:
 							       datetime.strptime(x.split(' ')[-1], '%H:%M:%S').strftime('%I:%M %p'))
 	meeting_data['Duration'] = meeting_data['Duration'].astype(str)
 	meeting_data['Duration'] = meeting_data['Duration'].apply(lambda x: \
-							       datetime.strptime(x.split(' ')[-1], '%H:%M:%S').strftime('%I:%M %p'))
-	meeting_data.sort_values(by=['id_bigint', 'Day'], inplace=True, ascending=True)
-	meeting_data.drop(['id_bigint'], axis=1, inplace=True)
+							       datetime.strptime(x.split(' ')[-1], '%H:%M:%S').strftime('%H:%M'))
+	
+	meeting_data['Day Ordered'] = meeting_data.apply(lambda x: DAYS_ORDERED[x['Day']], axis=1)
+	meeting_data['Real Time'] = pd.to_datetime(meeting_data['Start Time'], format='%I:%M %p')
+	meeting_data.sort_values(by=['Day Ordered', 'Real Time'], inplace=True, ascending=True)
+	meeting_data.drop(['id_bigint', 'Day Ordered', 'Real Time'], axis=1, inplace=True)
 	return meeting_data
 
 
@@ -209,36 +242,53 @@ def get_data(parameter:str = None,
 			regions.sort_values(by='id', inplace=True)
 			meetings = ALL_MEETINGS.copy()
 			if not previous_parameters['day'] == 'SHOW ALL':
-				these_days = {i:j for j, i in DAYS.items()}
-				day = these_days[previous_parameters['day']]
-				meetings = meetings.loc[meetings['Day'] == day]
+				meetings = meetings.loc[meetings['Day'] == previous_parameters['day']]
 			#Filter to just in-person meetings
-			meetings = meetings.loc[~pd.isnull(meetings['Street Address'])]
+			meetings = meetings.loc[(~pd.isnull(meetings['Street Address'])) & \
+			   						(meetings['Street Address'] != '')]
 			#Filter to just meetings in the region
 			meetings['geometry'] = [Point(i,j) for i, j in zip(meetings['Longitude'].values,
 						      							   	  meetings['Latitude'].values)]
 			meetings = gp.GeoDataFrame(meetings, crs='EPSG:4326', geometry='geometry')
+			if len(meetings) == 0:
+				return ['NONE']
 			regions = regions.loc[regions['geometry'].intersects(meetings.unary_union)]
 			del meetings
 			return ['SHOW ALL'] + regions.region.values.tolist()
 		elif previous_parameters['venue'] == 'online':
-			meetings = ALL_MEETINGS_ONLINE.copy()
-			meetings.drop(['geometry', 'Longitude', 'Latitude'], 
-		 				  axis=1, inplace=True, errors='ignore')
+			regions = gp.read_file(REGION_FILE)
+			regions.sort_values(by='id', inplace=True)
+			meetings = ALL_MEETINGS.copy()
 			if not previous_parameters['day'] == 'SHOW ALL':
-				these_days = {i:j for j, i in DAYS.items()}
-				day = these_days[previous_parameters['day']]
-				meetings = meetings.loc[meetings['Day'] == day]
-			return meetings
+				meetings = meetings.loc[meetings['Day'] == previous_parameters['day']]
+			#Filter to just in-person meetings
+			meetings = meetings.loc[(~pd.isnull(meetings['Virtual Meeting Link'])) & \
+			   						(meetings['Virtual Meeting Link'] != '')]
+			#Filter to just meetings in the region
+			meetings['geometry'] = [Point(i,j) for i, j in zip(meetings['Longitude'].values,
+						      							   	  meetings['Latitude'].values)]
+			meetings = gp.GeoDataFrame(meetings, crs='EPSG:4326', geometry='geometry')
+			if len(meetings) == 0:
+				return ['NONE']
+			regions = regions.loc[regions['geometry'].intersects(meetings.unary_union)]
+			del meetings
+			return ['SHOW ALL'] + regions.region.values.tolist()
 			
 
 	elif parameter == 'region':
 		if previous_parameters['region'] == 'SHOW ALL':
 			meetings = ALL_MEETINGS.copy()
+			if previous_parameters['venue'] == 'online':
+				meetings = meetings.loc[(~pd.isnull(meetings['Virtual Meeting Link'])) & \
+			    					    (meetings['Virtual Meeting Link'] != '')]
+			elif previous_parameters['venue'] == 'in-person':
+				meetings = meetings.loc[(~pd.isnull(meetings['Street Address'])) & \
+			    						(meetings['Street Address'] != '')]
+			else:
+				raise ValueError('Invalid venue parameter')
+			#Filter to just meetings on a given day
 			if not previous_parameters['day'] == 'SHOW ALL':
-				these_days = {i:j for j, i in DAYS.items()}
-				day = these_days[previous_parameters['day']]
-				meetings = meetings.loc[meetings['Day'] == day]
+				meetings = meetings.loc[meetings['Day'] == previous_parameters['day']]
 				meetings.drop(['geometry', 'Longitude', 'Latitude'], 
 		 				  axis=1, inplace=True, errors='ignore')
 				return meetings 
@@ -247,20 +297,52 @@ def get_data(parameter:str = None,
 		 				  axis=1, inplace=True, errors='ignore')
 				return meetings
 		else:
-			regions = gp.read_file(REGION_FILE)
-			region = regions.loc[regions.region==previous_parameters['region']].geometry.values[0]
-			# Filter meetings to only show meetings in region
-			meetings = ALL_MEETINGS.copy()
-			#Filter to just meetings in the region
-			meetings['geometry'] = [Point(i,j) for i, j in zip(meetings['Longitude'].values,
-						      							   	   meetings['Latitude'].values)]
-			meetings = gp.GeoDataFrame(meetings, crs='EPSG:4326', geometry='geometry')
-			meetings = meetings.loc[meetings['geometry'].within(region)]
-			del regions
-			del region
-			meetings.drop(['geometry', 'Longitude', 'Latitude'], 
-		 				  axis=1, inplace=True, errors='ignore')
-			return meetings
+			if previous_parameters['day'] == 'SHOW ALL':
+				regions = gp.read_file(REGION_FILE)
+				region = regions.loc[regions.region==previous_parameters['region']].geometry.values[0]
+				meetings = ALL_MEETINGS.copy()
+				if previous_parameters['venue'] == 'online':
+					meetings = meetings.loc[(~pd.isnull(meetings['Virtual Meeting Link'])) & \
+											(meetings['Virtual Meeting Link'] != '')]
+				elif previous_parameters['venue'] == 'in-person':
+					meetings = meetings.loc[(~pd.isnull(meetings['Street Address'])) & \
+											(meetings['Street Address'] != '')]
+				else:
+					raise ValueError('Invalid venue parameter')
+				#Filter to just meetings in the region
+				meetings['geometry'] = [Point(i,j) for i, j in zip(meetings['Longitude'].values,
+																meetings['Latitude'].values)]
+				meetings = gp.GeoDataFrame(meetings, crs='EPSG:4326', geometry='geometry')
+				meetings = meetings.loc[meetings['geometry'].within(region)]
+				del regions
+				del region
+				meetings.drop(['geometry', 'Longitude', 'Latitude'], 
+							axis=1, inplace=True, errors='ignore')
+				return meetings
+			else:
+				regions = gp.read_file(REGION_FILE)
+				region = regions.loc[regions.region==previous_parameters['region']].geometry.values[0]
+				meetings = ALL_MEETINGS.copy()
+				if previous_parameters['venue'] == 'online':
+					meetings = meetings.loc[(~pd.isnull(meetings['Virtual Meeting Link'])) & \
+											(meetings['Virtual Meeting Link'] != '')]
+				elif previous_parameters['venue'] == 'in-person':
+					meetings = meetings.loc[(~pd.isnull(meetings['Street Address'])) & \
+											(meetings['Street Address'] != '')]
+				else:
+					raise ValueError('Invalid venue parameter')
+				#Filter to just meetings in the region
+				meetings = meetings.loc[meetings['Day'] == previous_parameters['day']]
+				#Filter to just meetings in the region
+				meetings['geometry'] = [Point(i,j) for i, j in zip(meetings['Longitude'].values,
+																meetings['Latitude'].values)]
+				meetings = gp.GeoDataFrame(meetings, crs='EPSG:4326', geometry='geometry')
+				meetings = meetings.loc[meetings['geometry'].within(region)]
+				del regions
+				del region
+				meetings.drop(['geometry', 'Longitude', 'Latitude'], 
+							axis=1, inplace=True, errors='ignore')
+				return meetings
 
 
 	else:
@@ -268,18 +350,19 @@ def get_data(parameter:str = None,
 	
 
 
-class Picker(View):
+class Picker(ListView):
 	"""View for meeting picker. 
 	
 	"""
 	template_name = 'base.html'
 	context_object_name = 'entries'
-	model = None
-	allow_empty = True
+	model = PickerModel
+	allow_empty = False
 
 	def get_context_data(self, **kwargs):
 		"""Set initial view - days to pick meeting from.
 		"""
+		self.object_list = super().get_queryset()
 		context = super(Picker, self).get_context_data(**kwargs)
 		today = datetime.today()
 		weekday = calendar.weekday(today.year, today.month, today.day)
@@ -310,28 +393,41 @@ class Picker(View):
 		
 		"""
 		# Identify type of request
-		if request.method != 'GET' or kwargs['day'] == 'nan':
-			return HttpResponse(request)
+		if request.method != 'GET' or self.kwargs['day'] == 'nan':
+			return render(request, self.template_name, context=self.get_context_data())
 		#Account for two choices, online and in-person 
-		elif kwargs['venue'] == 'online':
+		"""
+		elif self.kwargs['venue'] == 'online':
 			meetings = get_data(parameter='venue', 
 								previous_parameters={'venue':'online',
-													 'day':kwargs['day']}
+													 'day':self.kwargs['day']}
 								)
 			return JsonResponse({'meetings':format_table(meetings)})
-		elif kwargs['venue'] == 'in-person' and kwargs['region'] == 'nan':
+		"""
+		if self.kwargs['day'] != 'nan' and self.kwargs['venue'] == 'nan':
+			return JsonResponse({'venues':['in-person', 'online']})
+		elif self.kwargs['venue'] == 'in-person' and self.kwargs['region'] == 'nan':
 			regions = get_data(parameter='venue', 
 							   previous_parameters={'venue':'in-person',
-													'day':kwargs['day']}
+													'day':self.kwargs['day']}
 							  )
+			return JsonResponse({'regions':regions})
+		elif self.kwargs['venue'] == 'online' and self.kwargs['region'] == 'nan':
+			regions = get_data(parameter='venue', 
+		      				   previous_parameters={'venue':'online', 'day':self.kwargs['day']}
+							   )
 			return JsonResponse({'regions':regions})
 		elif kwargs['region'] != 'nan':
 			meetings = get_data(parameter='region', 
-								previous_parameters={'venue':kwargs['venue'],
-													'day':kwargs['day'],
-													'region':kwargs['region']}
+								previous_parameters={'venue':self.kwargs['venue'],
+													'day':self.kwargs['day'],
+													'region':self.kwargs['region']}
 								)
 			return JsonResponse({'meetings':format_table(meetings)})
 		else:
 			raise ProcessingError(f"Invalid request: {request}")
-			
+
+
+
+picker = Picker.as_view()
+
