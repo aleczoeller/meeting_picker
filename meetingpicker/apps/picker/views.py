@@ -214,9 +214,17 @@ def get_meeting_data(online:bool = False) -> pd.DataFrame:
 
 # GET ALL MEETING DATA. Perform once on page load and store in session
 ALL_MEETINGS = get_meeting_data(online=False)
-ALL_MEETINGS_ONLINE = ALL_MEETINGS[(~pd.isnull(ALL_MEETINGS['Virtual Meeting Link']) & \
-				    			   (ALL_MEETINGS['Virtual Meeting Link'] != ''))]
-	
+ALL_MEETINGS['geometry'] = [Point(i,j) for i, j in zip(ALL_MEETINGS['Longitude'].values,
+						      						   ALL_MEETINGS['Latitude'].values)]
+ALL_REGIONS = gp.read_file(REGION_FILE).geometry.unary_union
+GEO_MEETINGS = gp.GeoDataFrame(ALL_MEETINGS, crs='EPSG:4326', geometry='geometry')
+# Filter to just online meetings
+ALL_MEETINGS_ONLINE = GEO_MEETINGS[(~pd.isnull(GEO_MEETINGS['Virtual Meeting Link']) & \
+				    			   (GEO_MEETINGS['Virtual Meeting Link'] != ''))]
+# Filter to just in-person meetings
+ALL_MEETINGS_INPERSON = GEO_MEETINGS[(~pd.isnull(GEO_MEETINGS['Street Address']) & \
+				      				 (GEO_MEETINGS['Street Address'] != ''))]
+REGIONS = gp.read_file(REGION_FILE)
 
 
 def get_data(parameter:str = None,
@@ -238,15 +246,13 @@ def get_data(parameter:str = None,
 	#Create database conn and pull meeting data 
 	if parameter == 'venue':
 		if previous_parameters['venue'] == 'in-person':
-			regions = gp.read_file(REGION_FILE)
+			regions = REGIONS.copy()
 			regions.sort_values(by='id', inplace=True)
 			meetings = ALL_MEETINGS.copy()
 			#Filter to just in-person meetings
 			meetings = meetings.loc[(~pd.isnull(meetings['Street Address'])) & \
 			   						(meetings['Street Address'] != '')]
 			#Filter to just meetings in the region
-			meetings['geometry'] = [Point(i,j) for i, j in zip(meetings['Longitude'].values,
-						      							   	  meetings['Latitude'].values)]
 			meetings = gp.GeoDataFrame(meetings, crs='EPSG:4326', geometry='geometry')
 			if len(meetings) == 0:
 				return ['NONE']
@@ -254,15 +260,13 @@ def get_data(parameter:str = None,
 			del meetings
 			return ['SHOW ALL'] + regions.region.values.tolist()
 		elif previous_parameters['venue'] == 'online':
-			regions = gp.read_file(REGION_FILE)
+			regions = REGIONS.copy()
 			regions.sort_values(by='id', inplace=True)
 			meetings = ALL_MEETINGS.copy()
 			#Filter to just in-person meetings
 			meetings = meetings.loc[(~pd.isnull(meetings['Virtual Meeting Link'])) & \
 			   						(meetings['Virtual Meeting Link'] != '')]
 			#Filter to just meetings in the region
-			meetings['geometry'] = [Point(i,j) for i, j in zip(meetings['Longitude'].values,
-						      							   	  meetings['Latitude'].values)]
 			meetings = gp.GeoDataFrame(meetings, crs='EPSG:4326', geometry='geometry')
 			if len(meetings) == 0:
 				return ['NONE']
@@ -273,46 +277,36 @@ def get_data(parameter:str = None,
 			raise ValueError('Invalid venue parameter')
 	elif parameter == 'region':
 		if previous_parameters['venue'] == 'in-person':
-			regions = gp.read_file(REGION_FILE)
 			if not previous_parameters['region'] == 'SHOW ALL':
+				regions = REGIONS.copy()
 				regions = regions.loc[regions['region']==previous_parameters['region']]
-			regions.sort_values(by='id', inplace=True)
-			meetings = ALL_MEETINGS.copy()
-			#Filter to just in-person meetings
-			meetings = meetings.loc[(~pd.isnull(meetings['Street Address'])) & \
-			   						(meetings['Street Address'] != '')]
+			#regions.sort_values(by='id', inplace=True)
+			meetings = ALL_MEETINGS_INPERSON[['Day', 'geometry']]
 			#Filter to just meetings in the region
-			meetings['geometry'] = [Point(i,j) for i, j in zip(meetings['Longitude'].values,
-						      							   	  meetings['Latitude'].values)]
-			meetings = gp.GeoDataFrame(meetings, crs='EPSG:4326', geometry='geometry')
-			if len(meetings) == 0:
-				return ['NONE']
-			meetings = meetings.loc[meetings['geometry'].within(regions.geometry.unary_union)]
-			del regions
-			meetings = meetings.sort_values(by='Day', key=sort_on_day)
+			if previous_parameters['region'] == 'SHOW ALL':
+				meetings = gp.sjoin(meetings, REGIONS)
+			else:
+				meetings = gp.sjoin(meetings, regions)
+				del regions
+			meetings = meetings[['Day']]
+			meetings.sort_values(by='Day', key=sort_on_day, inplace=True)
 			days = meetings.Day.unique().tolist()
-			del meetings
 			return ['SHOW ALL'] + days
 		elif previous_parameters['venue'] == 'online':
-			regions = gp.read_file(REGION_FILE)
 			if not previous_parameters['region'] == 'SHOW ALL':
+				regions = REGIONS.copy()
 				regions = regions.loc[regions['region']==previous_parameters['region']]
-			regions.sort_values(by='id', inplace=True)
-			meetings = ALL_MEETINGS.copy()
-			#Filter to just online meetings
-			meetings = meetings.loc[(~pd.isnull(meetings['Virtual Meeting Link'])) & \
-			   						(meetings['Virtual Meeting Link'] != '')]
+			#regions.sort_values(by='id', inplace=True)
+			meetings = ALL_MEETINGS_ONLINE[['Day', 'geometry']]
 			#Filter to just meetings in the region
-			meetings['geometry'] = [Point(i,j) for i, j in zip(meetings['Longitude'].values,
-						      							   	  meetings['Latitude'].values)]
-			meetings = gp.GeoDataFrame(meetings, crs='EPSG:4326', geometry='geometry')
-			if len(meetings) == 0:
-				return ['NONE']
-			meetings = meetings.loc[meetings['geometry'].within(regions.geometry.unary_union)]
-			del regions
-			meetings = meetings.sort_values(by='Day', key=sort_on_day)
+			if previous_parameters['region'] == 'SHOW ALL':
+				meetings = gp.sjoin(meetings, REGIONS)
+			else:
+				meetings = gp.sjoin(meetings, regions)
+				del regions
+			meetings = meetings[['Day']]
+			meetings.sort_values(by='Day', key=sort_on_day, inplace=True)
 			days = meetings.Day.unique().tolist()
-			del meetings
 			return ['SHOW ALL'] + days
 		else:
 			raise ValueError('Invalid venue parameter')
@@ -353,8 +347,6 @@ def get_data(parameter:str = None,
 				else:
 					raise ValueError('Invalid venue parameter')
 				#Filter to just meetings in the region
-				meetings['geometry'] = [Point(i,j) for i, j in zip(meetings['Longitude'].values,
-																meetings['Latitude'].values)]
 				meetings = gp.GeoDataFrame(meetings, crs='EPSG:4326', geometry='geometry')
 				meetings = meetings.loc[meetings['geometry'].within(region)]
 				del regions
@@ -377,8 +369,6 @@ def get_data(parameter:str = None,
 				#Filter to just meetings in the region
 				meetings = meetings.loc[meetings['Day'] == previous_parameters['day']]
 				#Filter to just meetings in the region
-				meetings['geometry'] = [Point(i,j) for i, j in zip(meetings['Longitude'].values,
-																meetings['Latitude'].values)]
 				meetings = gp.GeoDataFrame(meetings, crs='EPSG:4326', geometry='geometry')
 				meetings = meetings.loc[meetings['geometry'].within(region)]
 				del regions
