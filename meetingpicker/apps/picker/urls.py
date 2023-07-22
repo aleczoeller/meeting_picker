@@ -5,5 +5,5 @@ from .views import picker
 app_name = 'na_picker'
 
 urlpatterns = [
-    path('<str:day>/<str:venue>/<str:region>/', picker, name='picker'),
+    path('<str:venue>/<str:region>/<str:day>/', picker, name='picker'),
 ]

@@ -27,13 +27,13 @@ warnings.filterwarnings('ignore', category=UserWarning)
 load_dotenv(find_dotenv('../.env'), override=True)
 
 REGION_FILE = 'static/regions.shp'
-DAYS = {
-		i:j for i, j in zip([*range(7)], 
-		['MONDAY', 'TUESDAY', 'WEDNESDAY',
-		 'THURSDAY', 'FRIDAY', 'SATURDAY',
-		 'SUNDAY'
-		 ])
-	    }
+DAYS = {0: 'MONDAY',
+		1: 'TUESDAY',
+		2: 'WEDNESDAY',
+		3: 'THURSDAY',
+		4: 'FRIDAY',
+		5: 'SATURDAY',
+		6: 'SUNDAY'}
 USERNAME = getenv('DBUSER', None)
 PASSWORD = getenv('PASSWORD', None)
 HOSTNAME = getenv('HOSTNAME', None)
@@ -241,8 +241,6 @@ def get_data(parameter:str = None,
 			regions = gp.read_file(REGION_FILE)
 			regions.sort_values(by='id', inplace=True)
 			meetings = ALL_MEETINGS.copy()
-			if not previous_parameters['day'] == 'SHOW ALL':
-				meetings = meetings.loc[meetings['Day'] == previous_parameters['day']]
 			#Filter to just in-person meetings
 			meetings = meetings.loc[(~pd.isnull(meetings['Street Address'])) & \
 			   						(meetings['Street Address'] != '')]
@@ -259,8 +257,6 @@ def get_data(parameter:str = None,
 			regions = gp.read_file(REGION_FILE)
 			regions.sort_values(by='id', inplace=True)
 			meetings = ALL_MEETINGS.copy()
-			if not previous_parameters['day'] == 'SHOW ALL':
-				meetings = meetings.loc[meetings['Day'] == previous_parameters['day']]
 			#Filter to just in-person meetings
 			meetings = meetings.loc[(~pd.isnull(meetings['Virtual Meeting Link'])) & \
 			   						(meetings['Virtual Meeting Link'] != '')]
@@ -273,9 +269,56 @@ def get_data(parameter:str = None,
 			regions = regions.loc[regions['geometry'].intersects(meetings.unary_union)]
 			del meetings
 			return ['SHOW ALL'] + regions.region.values.tolist()
+		else:
+			raise ValueError('Invalid venue parameter')
+	elif parameter == 'region':
+		if previous_parameters['venue'] == 'in-person':
+			regions = gp.read_file(REGION_FILE)
+			if not previous_parameters['region'] == 'SHOW ALL':
+				regions = regions.loc[regions['region']==previous_parameters['region']]
+			regions.sort_values(by='id', inplace=True)
+			meetings = ALL_MEETINGS.copy()
+			#Filter to just in-person meetings
+			meetings = meetings.loc[(~pd.isnull(meetings['Street Address'])) & \
+			   						(meetings['Street Address'] != '')]
+			#Filter to just meetings in the region
+			meetings['geometry'] = [Point(i,j) for i, j in zip(meetings['Longitude'].values,
+						      							   	  meetings['Latitude'].values)]
+			meetings = gp.GeoDataFrame(meetings, crs='EPSG:4326', geometry='geometry')
+			if len(meetings) == 0:
+				return ['NONE']
+			meetings = meetings.loc[meetings['geometry'].within(regions.geometry.unary_union)]
+			del regions
+			meetings = meetings.sort_values(by='Day', key=sort_on_day)
+			days = meetings.Day.unique().tolist()
+			del meetings
+			return ['SHOW ALL'] + days
+		elif previous_parameters['venue'] == 'online':
+			regions = gp.read_file(REGION_FILE)
+			if not previous_parameters['region'] == 'SHOW ALL':
+				regions = regions.loc[regions['region']==previous_parameters['region']]
+			regions.sort_values(by='id', inplace=True)
+			meetings = ALL_MEETINGS.copy()
+			#Filter to just online meetings
+			meetings = meetings.loc[(~pd.isnull(meetings['Virtual Meeting Link'])) & \
+			   						(meetings['Virtual Meeting Link'] != '')]
+			#Filter to just meetings in the region
+			meetings['geometry'] = [Point(i,j) for i, j in zip(meetings['Longitude'].values,
+						      							   	  meetings['Latitude'].values)]
+			meetings = gp.GeoDataFrame(meetings, crs='EPSG:4326', geometry='geometry')
+			if len(meetings) == 0:
+				return ['NONE']
+			meetings = meetings.loc[meetings['geometry'].within(regions.geometry.unary_union)]
+			del regions
+			meetings = meetings.sort_values(by='Day', key=sort_on_day)
+			days = meetings.Day.unique().tolist()
+			del meetings
+			return ['SHOW ALL'] + days
+		else:
+			raise ValueError('Invalid venue parameter')
 			
 
-	elif parameter == 'region':
+	elif parameter == 'day':
 		if previous_parameters['region'] == 'SHOW ALL':
 			meetings = ALL_MEETINGS.copy()
 			if previous_parameters['venue'] == 'online':
@@ -343,8 +386,6 @@ def get_data(parameter:str = None,
 				meetings.drop(['geometry', 'Longitude', 'Latitude'], 
 							axis=1, inplace=True, errors='ignore')
 				return meetings
-
-
 	else:
 		raise ProcessingError(f"Invalid parameter: {parameter}")
 	
@@ -387,13 +428,13 @@ class Picker(ListView):
 		type message.
 		
 		Order of Query Parameters:
-		- Day of the week
 		- Online/In person
 		- Region
+		- Day of the week
 		
 		"""
 		# Identify type of request
-		if request.method != 'GET' or self.kwargs['day'] == 'nan':
+		if request.method != 'GET' or self.kwargs['venue'] == 'nan':
 			return render(request, self.template_name, context=self.get_context_data())
 		#Account for two choices, online and in-person 
 		"""
@@ -404,26 +445,33 @@ class Picker(ListView):
 								)
 			return JsonResponse({'meetings':format_table(meetings)})
 		"""
-		if self.kwargs['day'] != 'nan' and self.kwargs['venue'] == 'nan':
-			return JsonResponse({'venues':['in-person', 'online']})
-		elif self.kwargs['venue'] == 'in-person' and self.kwargs['region'] == 'nan':
+		if self.kwargs['venue'] == 'in-person' and self.kwargs['region'] == 'nan':
 			regions = get_data(parameter='venue', 
-							   previous_parameters={'venue':'in-person',
-													'day':self.kwargs['day']}
+							   previous_parameters={'venue':'in-person'},
 							  )
 			return JsonResponse({'regions':regions})
 		elif self.kwargs['venue'] == 'online' and self.kwargs['region'] == 'nan':
 			regions = get_data(parameter='venue', 
-		      				   previous_parameters={'venue':'online', 'day':self.kwargs['day']}
+		      				   previous_parameters={'venue':'online'},
 							   )
 			return JsonResponse({'regions':regions})
-		elif kwargs['region'] != 'nan':
-			meetings = get_data(parameter='region', 
+		elif kwargs['region'] != 'nan' and kwargs['day'] == 'nan':
+			days = get_data(parameter='region', 
 								previous_parameters={'venue':self.kwargs['venue'],
-													'day':self.kwargs['day'],
 													'region':self.kwargs['region']}
 								)
+			return JsonResponse({'days':days})
 			return JsonResponse({'meetings':format_table(meetings)})
+		elif kwargs['day'] != 'nan':
+			meetings = get_data(parameter='day', 
+								previous_parameters={'venue':self.kwargs['venue'],
+													'region':self.kwargs['region'],
+													'day':self.kwargs['day']}
+								)
+			if len(meetings) == 0:
+				return JsonResponse({'meetings':'NO MEETINGS'})
+			else:
+				return JsonResponse({'meetings':format_table(meetings)})
 		else:
 			raise ProcessingError(f"Invalid request: {request}")
 

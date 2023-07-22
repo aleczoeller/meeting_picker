@@ -26,18 +26,15 @@
         <div class="alert alert-info" role="alert" style="font-size:14pt;">
             <strong>Find a Meeting</strong>
             <button id="goback" style="display:none; right:6px;" type="button"
-                class=""btn btn-warning" onclick="goBack()">Go Back</button>
+                class="btn btn-warning" onclick="goBack()">Go Back</button>
         </div>
-        <div id="days" class="div-container">
-            {% for day in days %}
-                <button style="margin:10px;" type="button" onclick="sendDay(this)" class="btn btn-lg btn-primary" id="{{ day }}">{{ day }}</button>
-            {% endfor %}
-        </div>
-        <div id="venues" class="div-container" style="display:none;">
+        <div id="venues" class="div-container" style="display:grid;">
             <button style="margin:10px;" type="button" onclick="sendVenue(this)" class="btn btn-lg btn-primary" id="online">ONLINE</button>
             <button style="margin:10px;" type="button" onclick="sendVenue(this)" class="btn btn-lg btn-primary" id="in-person">IN PERSON</button>
         </div>
         <div id="regions" class="div-container" style="display:none;">
+        </div>
+        <div id="days" class="div-container" style="display:none;">
         </div>
         <div id="meetings" style="display:none;">
         </div>
@@ -54,20 +51,39 @@
     let region;
     var base_url = window.location.origin;
     //Function to create buttons for each region
-    function populateRegions(data, day, venue) {
+    function populateRegions(data, venue) {
         var regions = document.getElementById("regions");
         for (let i = 0; i < data.regions.length; i++) {
             let button = document.createElement("button");
             button.type = "button";
-            button.setAttribute("onclick", "sendRegion(this, '" + day + "', '" + venue + "')");
+            button.setAttribute("onclick", "sendRegion(this, '" + venue + "')");
             button.setAttribute("class", "btn btn-lg btn-primary");
+            button.setAttribute("style", "max-width:600px;");
             button.id = data.regions[i];
             button.innerHTML = data.regions[i];
             regions.appendChild(button);
         }
     }
+    //Create buttons for available days, given chosen venue and region
+    function populateDays(data, region) {
+        var days = document.getElementById("days");
+        for (let i = 0; i < data.days.length; i++) {
+            let button = document.createElement("button");
+            button.type = "button";
+            button.setAttribute("onclick", "sendDay(this, '" + region + "')");
+            button.setAttribute("class", "btn btn-lg btn-primary");
+            button.setAttribute("style", "max-width:600px;");
+            button.id = data.days[i];
+            button.innerHTML = data.days[i];
+            days.appendChild(button);
+        }
+    }
     // generate mobile version for each table
     function formatTable(table) {
+        width = $(document).width();
+        if (width > 1024) {
+            return table;
+        }
         document.getElementById("dummy").innerHTML = table;
         var table = document.getElementById("mtgs");
         var head = [];
@@ -125,7 +141,6 @@
         meetingBlock = document.getElementById("meetings");
         meetingBlock.appendChild(newtable);
         */
-       console.log(newtable.outerHTML);
        var st_output = '<table class="table table-striped table-bordered table-hover">' + 
                         newtable.innerHTML.replace('&lt;','<').replace('&gt;','>')
                             .replace('<tbody>','').replace('</tbody>', '') +
@@ -133,18 +148,21 @@
        return st_output;
     }
     //Function to send day to server
-    function sendDay(button) {
+    /*
+    RETRIEVES MEETINGS FROM SERVER
+    */
+    function sendDay(button, region) {
         var day = button.id;
-        console.log('Sending day: ' + day);
+        var venue = $("#venues").data("venue");
         $.ajax({
-            url: base_url + "/" + day + "/nan/nan/",
+            url: base_url + "/" + venue + "/" + region + "/" + day + "/",
             type: "GET",
             data: null,
             success: function(data) {
                 $("#days").css("display", "none");
-                $("#venues").data("day", day);
-                $("#venues").css("display", "grid");
-                $("#goback").css("display", "inline");
+                mtgs = document.getElementById("meetings");
+                mtgs.innerHTML = formatTable(data.meetings);
+                mtgs.setAttribute("style", "display:block;");                
             }
         });
     }
@@ -155,47 +173,59 @@
             type: "GET",
             data: null,       
             success: function(data) {
-                $("#days").css("display", "grid");
-                $("#venues").css("display", "none");
+                $("#days").css("display", "none");
+                $("#venues").css("display", "grid");
                 $("#regions").css("display", "none");
                 $("#meetings").css("display", "none");
                 $("#goback").css("display", "none");
+                var days = document.getElementById("days");
+                var regions = document.getElementById("regions");
+                var daysArr = [];
+                var regionsArr = [];
+                //Remove the buttons that have been populated
+                for (var i=0; i < days.children.length; i++) {
+                    daysArr.push(days.children[i]);
+                }
+                for (var i=0; i < regions.children.length; i++) {
+                    regionsArr.push(regions.children[i]);
+                }
+                for (var i=0; i < daysArr.length; i++) {
+                    daysArr[i].remove();
+                }
+                for (var i=0; i < regionsArr.length; i++) {
+                    regionsArr[i].remove();
+                }
             }
+
         });
     }
     //Function to send venue to server
     function sendVenue(button) {
         var venue = button.id;
-        day = $("#venues").data("day");
-        console.log("Day:" + day);
+        $("#venues").data("venue", venue);
         $.ajax({
-            url: base_url + "/" + day + "/" + venue + "/nan/",
+            url: base_url + "/" + venue + "/nan/nan/",
             type: "GET",
             data: null,
             success: function(data) {
                 $("#venues").css("display", "none");
-                populateRegions(data, day, venue);
+                populateRegions(data, venue);
                 $("#regions").css("display", "grid");
+                $("#goback").css("display", "inline");
             }
         });
     }
     //Function to send region to server
-    /*
-    RETRIEVES MEETINGS FROM SERVER
-    */
-    function sendRegion(button, day, venue) {
+    function sendRegion(button, venue) {
         var region = button.id;
-        console.log("Region URL:" + base_url + "/" + day + "/" + venue + "/" + region + "/");
         $.ajax({
-            url: base_url + "/" + day + "/" + venue + "/" + region + "/",
+            url: base_url + "/" + venue + "/" + region + "/nan/",
             type: "GET",
             data: null,
             success: function(data) {
                 $("#regions").css("display", "none");
-                //formatTable(data.meetings);  //Uncomment to set table from method (no return)
-                mtgs = document.getElementById("meetings");
-                mtgs.innerHTML = formatTable(data.meetings);
-                mtgs.setAttribute("style", "display:block;");
+                populateDays(data, region);
+                $("#days").css("display", "grid");
             }
         });
     }
