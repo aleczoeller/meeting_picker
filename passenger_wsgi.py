@@ -1,0 +1,1 @@
+from meetingpicker.wsgi import application
