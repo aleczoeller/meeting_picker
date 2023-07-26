@@ -157,7 +157,7 @@
         $.ajax({
             url: base_url + "/" + venue + "/" + region + "/" + day + "/",
             type: "GET",
-            data: null,
+            data: {'csrfmiddlewaretoken':"{{ csrf_token }}"},
             success: function(data) {
                 $("#days").css("display", "none");
                 mtgs = document.getElementById("meetings");
@@ -171,7 +171,7 @@
         $.ajax({
             url: base_url + "/nan/nan/nan/",
             type: "GET",
-            data: null,       
+            data: {'csrfmiddlewaretoken':"{{ csrf_token }}"},       
             success: function(data) {
                 $("#days").css("display", "none");
                 $("#venues").css("display", "grid");
@@ -206,7 +206,7 @@
         $.ajax({
             url: base_url + "/" + venue + "/nan/nan/",
             type: "GET",
-            data: null,
+            data: {'csrfmiddlewaretoken':"{{ csrf_token }}"},
             success: function(data) {
                 $("#venues").css("display", "none");
                 populateRegions(data, venue);
@@ -221,7 +221,7 @@
         $.ajax({
             url: base_url + "/" + venue + "/" + region + "/nan/",
             type: "GET",
-            data: null,
+            data: {'csrfmiddlewaretoken':"{{ csrf_token }}"},
             success: function(data) {
                 $("#regions").css("display", "none");
                 populateDays(data, region);

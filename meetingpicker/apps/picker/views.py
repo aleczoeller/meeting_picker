@@ -7,7 +7,7 @@ from typing import List, Union
 
 import geopandas as gp
 import MySQLdb as mysql
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.views.generic import ListView
 from dotenv import load_dotenv, find_dotenv
@@ -228,7 +228,7 @@ REGIONS = gp.read_file(REGION_FILE)
 
 
 def get_data(parameter:str = None,
-		     previous_parameters:Union[dict, str, int] = {}) -> list | pd.DataFrame:
+		     previous_parameters:Union[dict, str, int] = {}) -> Union[list, pd.DataFrame]:
 	"""
 	Method to retrieve a table of meeting information, given a set of parameters to 
 	filter the data with.
@@ -380,6 +380,13 @@ def get_data(parameter:str = None,
 		raise ProcessingError(f"Invalid parameter: {parameter}")
 	
 
+def redirect_view(request):
+	"""Simple redirect to main app base page.
+
+	Args:
+		request (request): request
+	"""
+	return HttpResponseRedirect('/nan/nan/nan/')
 
 class Picker(ListView):
 	"""View for meeting picker. 
@@ -406,7 +413,7 @@ class Picker(ListView):
 	
 
 	def get(self, request:request,
-			   *args, **kwargs) -> JsonResponse | HttpResponse:
+			   *args, **kwargs) -> Union[JsonResponse, HttpResponse]:
 		"""
 		Main view function. Takes user's GET requests 
 		(as button clicks) and returns either meeting 
