@@ -380,13 +380,6 @@ def get_data(parameter:str = None,
 		raise ProcessingError(f"Invalid parameter: {parameter}")
 	
 
-def redirect_view(request):
-	"""Simple redirect to main app base page.
-
-	Args:
-		request (request): request
-	"""
-	return HttpResponseRedirect('/nan/nan/nan/')
 
 class Picker(ListView):
 	"""View for meeting picker. 

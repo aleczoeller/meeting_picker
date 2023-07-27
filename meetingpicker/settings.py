@@ -25,10 +25,7 @@ SECRET_KEY = os.getenv('DJANGO_SECRET')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS =  ['https://www.nzna.org', 'nzna.org', 'www.nzna.org', 'dev.nzna.org',
-                 'new.nzna.org', 'bmlt.nzna.org', 'http://www.nzna.org',
-                 'https://nzna.org', 'nzna.org/meeting_picker',
-                 'www.nzna.org/meeting_picker', '0.0.0.0', '85.187.128.61', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS =  ['.nzna.org', '0.0.0.0', '85.187.128.61', 'localhost', '127.0.0.1']
 
 
 # Application definition
