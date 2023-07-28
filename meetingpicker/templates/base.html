@@ -26,11 +26,11 @@
         <div class="alert alert-info" role="alert" style="font-size:14pt;">
             <strong>Find a Meeting</strong>
             <button id="goback" style="display:none; right:6px;" type="button"
-                class="btn btn-warning" onclick="goBack()">Go Back</button>
+                class="btn btn-warning" style="max-width:600px;" onclick="goBack()">Go Back</button>
         </div>
         <div id="venues" class="div-container" style="display:grid;">
-            <button style="margin:10px;" type="button" onclick="sendVenue(this)" class="btn btn-lg btn-primary" id="online">ONLINE</button>
-            <button style="margin:10px;" type="button" onclick="sendVenue(this)" class="btn btn-lg btn-primary" id="in-person">IN PERSON</button>
+            <button style="margin:10px;" type="button" onclick="sendVenue(this)" style="max-width:600px;" class="btn btn-lg btn-primary" id="online">ONLINE</button>
+            <button style="margin:10px;" type="button" onclick="sendVenue(this)" style="max-width:600px;" class="btn btn-lg btn-primary" id="in-person">IN PERSON</button>
         </div>
         <div id="regions" class="div-container" style="display:none;">
         </div>
@@ -49,7 +49,7 @@
     let day;
     let venue;
     let region;
-    var base_url = window.location.origin;
+    const base_url = window.location.origin + "/meeting_picker";
     //Function to create buttons for each region
     function populateRegions(data, venue) {
         var regions = document.getElementById("regions");

@@ -27,7 +27,8 @@ SECRET_KEY = os.getenv('DJANGO_SECRET')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS =  ['.nzna.org', '0.0.0.0', '85.187.128.61', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS =  ['dev.nzna.org', '.nzna.org', '0.0.0.0', 
+                  '85.187.128.61', 'localhost', '127.0.0.1']
 
 
 # Application definition
@@ -108,15 +109,15 @@ LOGGING = {
     "disable_existing_loggers": False,
     "handlers": {
         "file": {
-            "level": "DEBUG",
+            "level": "WARNING",
             "class": "logging.FileHandler",
-            "filename": "./debug.log",
+            "filename": "./meeting_picker.log",
         },
     },
     "loggers": {
         "django": {
             "handlers": ["file"],
-            "level": "DEBUG",
+            "level": "WARNING",
             "propagate": True,
         },
     },
@@ -128,7 +129,7 @@ LOGGING = {
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Pacific/Auckland'
 
 USE_I18N = True
 
@@ -138,7 +139,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = 'meeting_picker/static/'
 STATICFILES_DIRS = ( os.path.join(BASE_DIR, 'staticfiles'), )
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 
