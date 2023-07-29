@@ -7,3 +7,5 @@ db.sqlite3
 *.xlsx
 *.pyc
 scrap/
+*.log
+*.log.*
