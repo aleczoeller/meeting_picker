@@ -29,8 +29,8 @@
                 class="btn btn-warning" style="max-width:600px;" onclick="goBack()">Go Back</button>
         </div>
         <div id="venues" class="div-container" style="display:grid;">
-            <button style="margin:10px;" type="button" onclick="sendVenue(this)" style="max-width:600px;" class="btn btn-lg btn-primary" id="online">ONLINE</button>
-            <button style="margin:10px;" type="button" onclick="sendVenue(this)" style="max-width:600px;" class="btn btn-lg btn-primary" id="in-person">IN PERSON</button>
+            <button style="margin:10px;max-width:600px;" type="button" onclick="sendVenue(this)" class="btn btn-lg btn-primary" id="online">ONLINE</button>
+            <button style="margin:10px;max-width:600px;" type="button" onclick="sendVenue(this)" class="btn btn-lg btn-primary" id="in-person">IN PERSON</button>
         </div>
         <div id="regions" class="div-container" style="display:none;">
         </div>
@@ -58,7 +58,7 @@
             button.type = "button";
             button.setAttribute("onclick", "sendRegion(this, '" + venue + "')");
             button.setAttribute("class", "btn btn-lg btn-primary");
-            button.setAttribute("style", "max-width:600px;");
+            button.setAttribute("style", "margin:10px;max-width:600px;");
             button.id = data.regions[i];
             button.innerHTML = data.regions[i];
             regions.appendChild(button);
@@ -72,7 +72,7 @@
             button.type = "button";
             button.setAttribute("onclick", "sendDay(this, '" + region + "')");
             button.setAttribute("class", "btn btn-lg btn-primary");
-            button.setAttribute("style", "max-width:600px;");
+            button.setAttribute("style", "margin:10px;max-width:600px;");
             button.id = data.days[i];
             button.innerHTML = data.days[i];
             days.appendChild(button);
