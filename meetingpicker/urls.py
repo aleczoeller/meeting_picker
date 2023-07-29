@@ -18,8 +18,6 @@ from django.contrib import admin
 from django.urls import path, include, re_path
 
 urlpatterns = [
-    re_path(r'^meeting_picker/', include([
         path('', include('meetingpicker.apps.picker.urls')),
         path('admin/', admin.site.urls),
-    ])),
 ]

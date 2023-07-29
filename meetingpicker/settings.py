@@ -27,7 +27,7 @@ SECRET_KEY = os.getenv('DJANGO_SECRET')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS =  ['dev.nzna.org', '.nzna.org', '0.0.0.0', 
+ALLOWED_HOSTS =  ['dev.nzna.org', 'picker.nzna.org', '.nzna.org', '0.0.0.0', 
                   '85.187.128.61', 'localhost', '127.0.0.1']
 
 
@@ -139,8 +139,8 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-STATIC_URL = 'meeting_picker/static/'
-MEDIA_URL = 'meeting_picker/media/'
+STATIC_URL = 'static/'
+MEDIA_URL = 'media/'
 STATICFILES_DIRS = []
 if DEBUG:
     STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
