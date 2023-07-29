@@ -141,14 +141,13 @@ USE_TZ = True
 
 STATIC_URL = 'meeting_picker/static/'
 MEDIA_URL = 'meeting_picker/media/'
-STATICFILES_DIRS = ( os.path.join(BASE_DIR, 'static'), )
+STATICFILES_DIRS = []
 if DEBUG:
     STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
     MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 else:
-    STATIC_ROOT = 'home/nznaorg/dev.nzna.org/meeting_picker/static/'
-    MEDIA_ROOT = 'home/nznaorg/dev.nzna.org/meeting_picker/media/'
-
+    STATIC_ROOT = '/home/nznaorg/repositories/meeting_picker/static'
+    MEDIA_ROOT = '/home/nznaorg/repositories/meeting_picker/media'
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
