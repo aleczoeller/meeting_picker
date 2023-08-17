@@ -13,7 +13,10 @@ import os
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 from pathlib import Path
 from dotenv import load_dotenv, find_dotenv 
-load_dotenv(find_dotenv('../.env'))
+
+# Load environment file (if present)
+# For production, there will be no .env file
+load_dotenv(find_dotenv('../.env'), override=False)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent 
