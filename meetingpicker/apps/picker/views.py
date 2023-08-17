@@ -5,8 +5,10 @@ from os import getenv
 from requests import request
 from typing import List, Union
 
+import asyncio
 import geopandas as gp
 import MySQLdb as mysql
+from asgiref.sync import sync_to_async
 from django.http import HttpResponse, JsonResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.views.generic import ListView
@@ -75,6 +77,20 @@ day_list = start_list + end_list
 day_names = [DAYS[i] for i in day_list]
 day_list = [*range(7)]
 DAYS_ORDERED = {i:j for i, j in zip(day_names, day_list)}
+
+# Variables for dataframes
+ALL_MEETINGS = None
+ALL_REGIONS = None
+ALL_MEETINGS_ONLINE = None
+ALL_MEETINGS_INPERSON = None
+REGIONS = None
+# Variables for async futures
+am_future = None
+ar_future = None
+gm_future = None
+amo_future = None
+ami_future = None
+r_future = None
 
 
 
@@ -211,23 +227,111 @@ def get_meeting_data(online:bool = False) -> pd.DataFrame:
 	meeting_data.drop(['id_bigint', 'Day Ordered', 'Real Time'], axis=1, inplace=True)
 	return meeting_data
 
+async def all_meetings(am_future:asyncio.Future) -> asyncio.Future:
+	"""Asyncronous call to generate meeting dataframe. Returns as a future.
 
-# GET ALL MEETING DATA. Perform once on page load and store in session
-ALL_MEETINGS = get_meeting_data(online=False)
-ALL_MEETINGS['geometry'] = [Point(i,j) for i, j in zip(ALL_MEETINGS['Longitude'].values,
-						      						   ALL_MEETINGS['Latitude'].values)]
-ALL_REGIONS = gp.read_file(REGION_FILE).geometry.unary_union
-GEO_MEETINGS = gp.GeoDataFrame(ALL_MEETINGS, crs='EPSG:4326', geometry='geometry')
-# Filter to just online meetings
-ALL_MEETINGS_ONLINE = GEO_MEETINGS[(~pd.isnull(GEO_MEETINGS['Virtual Meeting Link']) & \
-				    			   (GEO_MEETINGS['Virtual Meeting Link'] != ''))]
-# Filter to just in-person meetings
-ALL_MEETINGS_INPERSON = GEO_MEETINGS[(~pd.isnull(GEO_MEETINGS['Street Address']) & \
-				      				 (GEO_MEETINGS['Street Address'] != ''))]
-REGIONS = gp.read_file(REGION_FILE)
+	Args:
+		am_future (asyncio.Future): new empty future object
+
+	Returns:
+		asyncio.Future: future object, value is meeting dataframe
+	"""
+	# GET ALL MEETING DATA. Perform once on page load and store in session
+	ALL_MEETINGS = get_meeting_data(online=False)
+	ALL_MEETINGS['geometry'] = [Point(i,j) for i, j in zip(ALL_MEETINGS['Longitude'].values,
+														ALL_MEETINGS['Latitude'].values)]
+	am_future.set_result(ALL_MEETINGS)
+
+async def all_regions(ar_future:asyncio.Future) -> asyncio.Future:
+	"""Asynchronous call to generate all regions. Returns as a future.
+
+	Args:
+		ar_future (asyncio.Future): new empty future object
+
+	Returns:
+		asyncio.Future: future object, value is all regions as shapely geometry
+	"""
+	ALL_REGIONS = gp.read_file(REGION_FILE).geometry.unary_union
+	ar_future.set_result(ALL_REGIONS)
+
+async def geo_meetings(am_future: asyncio.Future, gm_future:asyncio.Future) -> asyncio.Future:
+	"""Asynchronous call to get all meetings as geopandas dataframe. Returns as a future.
+
+	Args:
+		gm_future (asyncio.Future): new empty future object
+
+	Returns:
+		asyncio.Future: future object, value is all meetings as geopandas dataframe
+	"""
+	ALL_MEETINGS = await am_future
+	GEO_MEETINGS = gp.GeoDataFrame(ALL_MEETINGS, crs='EPSG:4326', geometry='geometry')
+	gm_future.set_result(GEO_MEETINGS)
+
+async def all_meetings_online(gm_future:asyncio.Future, amo_future:asyncio.Future) -> asyncio.Future:
+	"""Asynchronous call to get all online meetings. Returns as a future.
+	
+	Args:
+		amo_future (asyncio.Future): new empty future object
+
+	Returns:
+		asyncio.Future: future object, value is all online meetings
+	"""
+	GEO_MEETINGS = await gm_future
+	ALL_MEETINGS_ONLINE = GEO_MEETINGS[(~pd.isnull(GEO_MEETINGS['Virtual Meeting Link']) & \
+									(GEO_MEETINGS['Virtual Meeting Link'] != ''))]
+	amo_future.set_result(ALL_MEETINGS_ONLINE)
+
+async def all_meetings_inperson(gm_future:asyncio.Future, ami_future:asyncio.Future) -> asyncio.Future:
+	"""Asynchronous call to get all in-person meetings. Returns as a future.
+
+	Args:
+		ami_future (asyncio.Future): new empty future
+
+	Returns:
+		asyncio.Future: future object, value is all in-person meetings
+	"""
+	GEO_MEETINGS = await gm_future
+	# Filter to just in-person meetings
+	ALL_MEETINGS_INPERSON = GEO_MEETINGS[(~pd.isnull(GEO_MEETINGS['Street Address']) & \
+										(GEO_MEETINGS['Street Address'] != ''))]
+	ami_future.set_result(ALL_MEETINGS_INPERSON)
+
+async def regions(r_future:asyncio.Future) -> asyncio.Future:
+	"""Asynchronous call to get all regions. Returns as a future.
+
+	Args:
+		r_future (asyncio.Future): new empty future object
+
+	Returns:
+		asyncio.Future: future object, value is all regions as geopandas dataframe
+	"""
+	REGIONS = gp.read_file(REGION_FILE)
+	r_future.set_result(REGIONS)
+
+async def run():
+	# Call all asynchronous functions.
+	# Create future objects (that can be awaited in subsequent methods)
+	# and pass them to the async functions
+	loop = asyncio.get_running_loop()
+	global am_future, ar_future, gm_future, amo_future, ami_future, r_future
+	am_future = loop.create_future()
+	ar_future = loop.create_future()
+	gm_future = loop.create_future()
+	amo_future = loop.create_future()
+	ami_future = loop.create_future()
+	r_future = loop.create_future()
+	# Call all async functions
+	loop.create_task(all_meetings(am_future))
+	loop.create_task(all_regions(ar_future))
+	loop.create_task(geo_meetings(am_future, gm_future))
+	loop.create_task(all_meetings_online(gm_future, amo_future))
+	loop.create_task(all_meetings_inperson(gm_future, ami_future))
+	loop.create_task(regions(r_future))
+asyncio.run(run())
 
 
-def get_data(parameter:str = None,
+
+async def get_data(parameter:str = None,
 		     previous_parameters:Union[dict, str, int] = {}) -> Union[list, pd.DataFrame]:
 	"""
 	Method to retrieve a table of meeting information, given a set of parameters to 
@@ -243,11 +347,20 @@ def get_data(parameter:str = None,
 	pd.DataFrame: table of meeting information 
 	
 	"""
-	#Create database conn and pull meeting data 
+	# Global variables
+	global REGIONS
+	global ALL_MEETINGS
+	global ALL_MEETINGS_ONLINE
+	global ALL_MEETINGS_INPERSON
+	# Create database conn and pull meeting data 
 	if parameter == 'venue':
 		if previous_parameters['venue'] == 'in-person':
+			if REGIONS is None:
+				REGIONS = await r_future
 			regions = REGIONS.copy()
 			regions.sort_values(by='id', inplace=True)
+			if ALL_MEETINGS is None:
+				ALL_MEETINGS = await am_future
 			meetings = ALL_MEETINGS.copy()
 			#Filter to just in-person meetings
 			meetings = meetings.loc[(~pd.isnull(meetings['Street Address'])) & \
@@ -260,8 +373,12 @@ def get_data(parameter:str = None,
 			del meetings
 			return ['SHOW ALL'] + regions.region.values.tolist()
 		elif previous_parameters['venue'] == 'online':
+			if REGIONS is None:
+				REGIONS = await r_future
 			regions = REGIONS.copy()
 			regions.sort_values(by='id', inplace=True)
+			if ALL_MEETINGS is None:
+				ALL_MEETINGS = await am_future
 			meetings = ALL_MEETINGS.copy()
 			#Filter to just in-person meetings
 			meetings = meetings.loc[(~pd.isnull(meetings['Virtual Meeting Link'])) & \
@@ -278,9 +395,13 @@ def get_data(parameter:str = None,
 	elif parameter == 'region':
 		if previous_parameters['venue'] == 'in-person':
 			if not previous_parameters['region'] == 'SHOW ALL':
+				if REGIONS is None:
+					REGIONS = await r_future
 				regions = REGIONS.copy()
 				regions = regions.loc[regions['region']==previous_parameters['region']]
 			#regions.sort_values(by='id', inplace=True)
+			if ALL_MEETINGS_INPERSON is None:
+				ALL_MEETINGS_INPERSON = await ami_future
 			meetings = ALL_MEETINGS_INPERSON[['Day', 'geometry']]
 			#Filter to just meetings in the region
 			if previous_parameters['region'] == 'SHOW ALL':
@@ -294,9 +415,13 @@ def get_data(parameter:str = None,
 			return ['SHOW ALL'] + days
 		elif previous_parameters['venue'] == 'online':
 			if not previous_parameters['region'] == 'SHOW ALL':
+				if REGIONS is None:
+					REGIONS = await r_future
 				regions = REGIONS.copy()
 				regions = regions.loc[regions['region']==previous_parameters['region']]
 			#regions.sort_values(by='id', inplace=True)
+			if ALL_MEETINGS_ONLINE is None:
+				ALL_MEETINGS_ONLINE = await amo_future
 			meetings = ALL_MEETINGS_ONLINE[['Day', 'geometry']]
 			#Filter to just meetings in the region
 			if previous_parameters['region'] == 'SHOW ALL':
@@ -314,6 +439,8 @@ def get_data(parameter:str = None,
 
 	elif parameter == 'day':
 		if previous_parameters['region'] == 'SHOW ALL':
+			if ALL_MEETINGS is None:
+				ALL_MEETINGS = await am_future
 			meetings = ALL_MEETINGS.copy()
 			if previous_parameters['venue'] == 'online':
 				meetings = meetings.loc[(~pd.isnull(meetings['Virtual Meeting Link'])) & \
@@ -323,6 +450,7 @@ def get_data(parameter:str = None,
 			    						(meetings['Street Address'] != '')]
 			else:
 				raise ValueError('Invalid venue parameter')
+			print(previous_parameters)
 			#Filter to just meetings on a given day
 			if not previous_parameters['day'] == 'SHOW ALL':
 				meetings = meetings.loc[meetings['Day'] == previous_parameters['day']]
@@ -335,8 +463,11 @@ def get_data(parameter:str = None,
 				return meetings
 		else:
 			if previous_parameters['day'] == 'SHOW ALL':
-				regions = gp.read_file(REGION_FILE)
-				region = regions.loc[regions.region==previous_parameters['region']].geometry.values[0]
+				if REGIONS is None:
+					REGIONS = await r_future
+				region = REGIONS.loc[REGIONS.region==previous_parameters['region']].geometry.values[0]
+				if ALL_MEETINGS is None:
+					ALL_MEETINGS = await am_future
 				meetings = ALL_MEETINGS.copy()
 				if previous_parameters['venue'] == 'online':
 					meetings = meetings.loc[(~pd.isnull(meetings['Virtual Meeting Link'])) & \
@@ -355,8 +486,9 @@ def get_data(parameter:str = None,
 							axis=1, inplace=True, errors='ignore')
 				return meetings
 			else:
-				regions = gp.read_file(REGION_FILE)
-				region = regions.loc[regions.region==previous_parameters['region']].geometry.values[0]
+				if REGIONS is None:
+					REGIONS = await r_future
+				region = REGIONS.loc[REGIONS.region==previous_parameters['region']].geometry.values[0]
 				meetings = ALL_MEETINGS.copy()
 				if previous_parameters['venue'] == 'online':
 					meetings = meetings.loc[(~pd.isnull(meetings['Virtual Meeting Link'])) & \
@@ -371,7 +503,6 @@ def get_data(parameter:str = None,
 				#Filter to just meetings in the region
 				meetings = gp.GeoDataFrame(meetings, crs='EPSG:4326', geometry='geometry')
 				meetings = meetings.loc[meetings['geometry'].within(region)]
-				del regions
 				del region
 				meetings.drop(['geometry', 'Longitude', 'Latitude'], 
 							axis=1, inplace=True, errors='ignore')
@@ -405,7 +536,7 @@ class Picker(ListView):
 		return context
 	
 
-	def get(self, request:request,
+	async def get(self, request:request,
 			   *args, **kwargs) -> Union[JsonResponse, HttpResponse]:
 		"""
 		Main view function. Takes user's GET requests 
@@ -436,24 +567,23 @@ class Picker(ListView):
 			return JsonResponse({'meetings':format_table(meetings)})
 		"""
 		if self.kwargs['venue'] == 'in-person' and self.kwargs['region'] == 'nan':
-			regions = get_data(parameter='venue', 
+			regions = await get_data(parameter='venue', 
 							   previous_parameters={'venue':'in-person'},
 							  )
 			return JsonResponse({'regions':regions})
 		elif self.kwargs['venue'] == 'online' and self.kwargs['region'] == 'nan':
-			regions = get_data(parameter='venue', 
+			regions = await get_data(parameter='venue', 
 		      				   previous_parameters={'venue':'online'},
 							   )
 			return JsonResponse({'regions':regions})
 		elif kwargs['region'] != 'nan' and kwargs['day'] == 'nan':
-			days = get_data(parameter='region', 
+			days = await get_data(parameter='region', 
 								previous_parameters={'venue':self.kwargs['venue'],
 													'region':self.kwargs['region']}
 								)
 			return JsonResponse({'days':days})
-			return JsonResponse({'meetings':format_table(meetings)})
 		elif kwargs['day'] != 'nan':
-			meetings = get_data(parameter='day', 
+			meetings = await get_data(parameter='day', 
 								previous_parameters={'venue':self.kwargs['venue'],
 													'region':self.kwargs['region'],
 													'day':self.kwargs['day']}

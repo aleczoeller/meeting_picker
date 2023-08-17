@@ -13,7 +13,10 @@ import os
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 from pathlib import Path
 from dotenv import load_dotenv, find_dotenv 
-load_dotenv(find_dotenv('../.env'))
+
+# Load environment file (if present)
+# For production, there will be no .env file
+load_dotenv(find_dotenv('../.env'), override=False)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent 
@@ -27,7 +30,7 @@ SECRET_KEY = os.getenv('DJANGO_SECRET')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS =  ['dev.nzna.org', '.nzna.org', '0.0.0.0', 
+ALLOWED_HOSTS =  ['dev.nzna.org', 'picker.nzna.org', '.nzna.org', '0.0.0.0', 
                   '85.187.128.61', 'localhost', '127.0.0.1']
 
 
@@ -139,16 +142,15 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-STATIC_URL = 'meeting_picker/static/'
-MEDIA_URL = 'meeting_picker/media/'
-STATICFILES_DIRS = ( os.path.join(BASE_DIR, 'static'), )
+STATIC_URL = 'static/'
+MEDIA_URL = 'media/'
+STATICFILES_DIRS = []
 if DEBUG:
     STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
     MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 else:
-    STATIC_ROOT = 'home/nznaorg/dev.nzna.org/meeting_picker/static/'
-    MEDIA_ROOT = 'home/nznaorg/dev.nzna.org/meeting_picker/media/'
-
+    STATIC_ROOT = '/home/nznaorg/repositories/meeting_picker/static'
+    MEDIA_ROOT = '/home/nznaorg/repositories/meeting_picker/media'
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
