@@ -327,6 +327,7 @@ async def run():
 	loop.create_task(all_meetings_online(gm_future, amo_future))
 	loop.create_task(all_meetings_inperson(gm_future, ami_future))
 	loop.create_task(regions(r_future))
+
 asyncio.run(run())
 
 
@@ -426,6 +427,8 @@ async def get_data(parameter:str = None,
 			#Filter to just meetings in the region
 			if previous_parameters['region'] == 'SHOW ALL':
 				meetings = gp.sjoin(meetings, REGIONS)
+			elif regions is None or len(regions) == 0:
+				meetings = meetings.loc[meetings['region'] == 'not_real_value']
 			else:
 				meetings = gp.sjoin(meetings, regions)
 				del regions
@@ -480,7 +483,6 @@ async def get_data(parameter:str = None,
 				#Filter to just meetings in the region
 				meetings = gp.GeoDataFrame(meetings, crs='EPSG:4326', geometry='geometry')
 				meetings = meetings.loc[meetings['geometry'].within(region)]
-				del regions
 				del region
 				meetings.drop(['geometry', 'Longitude', 'Latitude'], 
 							axis=1, inplace=True, errors='ignore')
