@@ -112,7 +112,7 @@ LOGGING = {
     "disable_existing_loggers": False,
     "handlers": {
         "file": {
-            "level": "DEBUG",
+            "level": "EXCEPTION", # Change to DEBUG to have all activity listed in logs
             "class": "logging.FileHandler",
             "filename": "./meeting_picker.log",
         },
@@ -120,7 +120,7 @@ LOGGING = {
     "loggers": {
         "django": {
             "handlers": ["file"],
-            "level": "DEBUG",
+            "level": "EXCEPTION", # Change to DEBUG to have all activity listed in logs
             "propagate": True,
         },
     },
