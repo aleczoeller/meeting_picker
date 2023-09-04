@@ -28,7 +28,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('DJANGO_SECRET')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True if os.getenv('DEBUG') == 'True' else False
 
 ALLOWED_HOSTS =  ['dev.nzna.org', 'picker.nzna.org', '.nzna.org', '0.0.0.0', 
                   '85.187.128.61', 'localhost', '127.0.0.1']
