@@ -10,6 +10,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="NA Meeting Picker">
     <meta name="author" content="Alec Zoeller">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     {% block css %}
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
     <link rel="stylesheet" type="text/css" href="{% static 'modstyles.css' %}">   
@@ -45,6 +46,8 @@
     {% endblock %}
 
   <script>
+    const d = new Date(); //Today's date, for use in highlighting buttons
+    const today = d.toLocaleString('en-us', {  weekday: 'long' }).toUpperCase();
     //Define parameters to update/populate as we go
     let day;
     let venue;
@@ -71,7 +74,11 @@
             let button = document.createElement("button");
             button.type = "button";
             button.setAttribute("onclick", "sendDay(this, '" + region + "')");
-            button.setAttribute("class", "btn btn-lg btn-primary");
+            if (data.days[i] != today)  {
+                button.setAttribute("class", "btn btn-lg btn-primary");
+            }   else    {
+                button.setAttribute("class", "btn btn-lg btn-primary btn-primary-pulse");
+                }
             button.setAttribute("style", "margin:10px;max-width:600px;");
             button.id = data.days[i];
             button.innerHTML = data.days[i];
@@ -81,7 +88,7 @@
     // generate mobile version for each table
     function formatTable(table) {
         width = $(document).width();
-        if (width > 1024) {
+        if (width > 800) {
             return table;
         }
         document.getElementById("dummy").innerHTML = table;
@@ -112,7 +119,7 @@
             for (var j=0; j<rows[i].length; j++) { 
                 
                 if ((rows[i][j] != "") & (rows[i][j] != null) & (j != 5))   {  //Exclude blank cells and "duration" cells
-
+                    //Styling for mobile only, so each row (tr) has one cell (td) only
                     var new_tr = newtable.tBodies[0].insertRow();    
                     var new_td = new_tr.insertCell();
                     if (j == 4) {  // Merge start time and duration values
@@ -134,13 +141,10 @@
                 }
             }                  
         }
+
         document.getElementById("dummy").innerHTML = "";
         newtable.setAttribute("class", "table table-striped table-bordered table-hover");
-        /*
-        newtable.innerHTML = newtable.innerHTML.replace('<','&lt;').replace('>','&gt;')
-        meetingBlock = document.getElementById("meetings");
-        meetingBlock.appendChild(newtable);
-        */
+
        var st_output = '<table class="table table-striped table-bordered table-hover">' + 
                         newtable.innerHTML.replace('&lt;','<').replace('&gt;','>')
                             .replace('<tbody>','').replace('</tbody>', '') +
@@ -148,9 +152,6 @@
        return st_output;
     }
     //Function to send day to server
-    /*
-    RETRIEVES MEETINGS FROM SERVER
-    */
     function sendDay(button, region) {
         var day = button.id;
         var venue = $("#venues").data("venue");
@@ -213,9 +214,7 @@
                 $("#regions").css("display", "grid");
                 $("#goback").css("display", "inline");
             }
-        }); /*.then(function( response, textStatus, jqXHR ) {
-            console.log(JSON.parse(response.data));
-        }); */
+        }); 
     }
     //Function to send region to server
     function sendRegion(button, venue) {

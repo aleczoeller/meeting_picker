@@ -1,4 +1,4 @@
-#! .venv/scripts/python
+# -*- coding: utf-8 -*-
 
 import asyncio
 import calendar
@@ -84,6 +84,7 @@ ALL_MEETINGS = None
 ALL_REGIONS = None
 ALL_MEETINGS_ONLINE = None
 ALL_MEETINGS_INPERSON = None
+GEO_MEETINGS = None
 # Variables for async futures
 am_future = None
 ar_future = None
@@ -163,10 +164,14 @@ def get_meeting_data(online:bool = False) -> pd.DataFrame:
     meeting_data['Duration'] = meeting_data['Duration'].astype(str)
     meeting_data['Duration'] = meeting_data['Duration'].apply(lambda x: \
                                    datetime.strptime(x.split(' ')[-1], '%H:%M:%S').strftime('%H:%M'))
-    
+    meeting_data['Duration'] = meeting_data['Duration'].apply(lambda x: \
+                                   x[1:] if x[0] == '0' else x)    
     meeting_data['Day Ordered'] = meeting_data.apply(lambda x: DAYS_ORDERED[x['Day']], axis=1)
     meeting_data['Real Time'] = pd.to_datetime(meeting_data['Start Time'], format='%I:%M %p')
     meeting_data.sort_values(by=['Day Ordered', 'Real Time'], inplace=True, ascending=True)
+    meeting_data.reset_index(drop=True, inplace=True)
+    # Added following line to accomodate geopandas not importing datetime objects correctly
+    meeting_data['Start Time'] = meeting_data['Real Time'].apply(lambda x: x.strftime('%H:%M:%S'))
     meeting_data.drop(['id_bigint', 'Day Ordered', 'Real Time'], axis=1, inplace=True)
     return meeting_data
 
@@ -210,7 +215,12 @@ async def geo_meetings(am_future: asyncio.Future, gm_future:asyncio.Future) -> a
         asyncio.Future: future object, value is all meetings as geopandas dataframe
     """
     ALL_MEETINGS = await am_future
+    AR = gp.read_file(REGION_FILE)
+    AR = AR[['intl', 'geometry']]
     GEO_MEETINGS = gp.GeoDataFrame(ALL_MEETINGS, crs='EPSG:4326', geometry='geometry')
+    # Join to add international column to GEO_MEETINGS
+    GEO_MEETINGS = gp.sjoin(GEO_MEETINGS, AR)
+    GEO_MEETINGS.drop(['index_right'], axis=1, inplace=True)
     gm_future.set_result(GEO_MEETINGS)
 
 async def all_meetings_online(gm_future:asyncio.Future, amo_future:asyncio.Future) -> asyncio.Future:
@@ -269,6 +279,9 @@ async def save_all():
     ALL_MEETINGS_ONLINE = await amo_future
     ALL_MEETINGS_INPERSON = await ami_future
     ALL_REGIONS = await ar_future
+    GEO_MEETINGS = await gm_future
+    # Update to add international column to all meetings
+    ALL_MEETINGS = GEO_MEETINGS
     # Save all dataframes to local file
     ALL_MEETINGS.to_file('data/all_meetings.geojson', driver='GeoJSON')
     ALL_MEETINGS_ONLINE.to_file('data/all_meetings_online.geojson', driver='GeoJSON')
