@@ -67,7 +67,7 @@ Your "HOSTNAME" variable may be retrieved from cPanel, or by pinging your websit
 The BMLT root server username and password may be retrieved from the administrator of the server, or via cPanel's file manager from the **autoconfig.inc.php** file in your root server's base directory.
 
 This is how your environment variables can be set in cPanel's Python Apps section, if you are using a host that provides this feature:
-![cPanel Environment Variables](data/readme_envs.png)
+![cPanel Environment Variables](resources/readme_envs.png)
 
 
 ---
@@ -103,4 +103,4 @@ In cPanel, go into the *Remote MySQL* section and enter the returned IP address,
 
 - Create a cron job on your host server to refresh your meetings from the database source. Your credentials will be stored in the environments variables and/or .env file (if you have one).  The command to run is: `*/15 * * * * /home/nznaorg/repositories/meeting_picker/refresh_meetings.sh >> /home/nznaorg/repositories/meeting_picker/crontab.log 2>&1`  This will run the script every 15 minutes, and log the output to a file in the project's root directory.  To add a crontab, in the terminal on the host machine run `crontab -e` and paste the line at the bottom of the file.  Save and exit.
 - If you have cPanel as a part of your hosting environment, the Python Apps section can be an effective method for deployment.  Your initial configuration can look like this:
-![cPanel Python App](data/readme_setup.png)
+![cPanel Python App](resources/readme_setup.png)
