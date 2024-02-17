@@ -93,3 +93,6 @@ You'll need to provide your machine's external IP address, this can be obtained 
 
 In cPanel, go into the *Remote MySQL* section and enter the returned IP address, with a comment like "locaL testing *yournamehere*". You should be all set.
 
+## Considerations for Production ##
+
+- Create a cron job on your host server to refresh your meetings from the database source. Your credentials will be stored in the environments variables and/or .env file (if you have one).  The command to run is: `*/15 * * * * /home/nznaorg/repositories/meeting_picker/refresh_meetings.sh >> /home/nznaorg/repositories/meeting_picker/crontab.log 2>&1`  This will run the script every 15 minutes, and log the output to a file in the project's root directory.  To add a crontab, in the terminal on the host machine run `crontab -e` and paste the line at the bottom of the file.  Save and exit.

@@ -17,6 +17,8 @@ from meetingpicker.utils.queries import (meeting_data_query,
                                          meeting_format_query,
                                          meeting_main_query)
 
+# Environments set in application settings in cPanel/Python app settings
+# Can be overriden with local file .env, for testing or updates
 load_dotenv(find_dotenv('.env'), override=True)
 
 #Filter pandas warning about using a mysql connection directly

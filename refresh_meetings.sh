@@ -10,6 +10,7 @@ do
     if [ "$OSTYPE" = "$item" ]; then
         $PYTHONDIS refresh_meetings.py
     fi
+echo "Completed meeting refresh on $(date)"
 done
 
 declare -a arr=("msys" "cygwin" "win32")
@@ -18,4 +19,5 @@ do
     if [ "$OSTYPE" = "$item" ] 
         then $PYTHONDIS refresh_meetings_win.py
     fi
+echo "Completed meeting refresh on $(date)"
 done

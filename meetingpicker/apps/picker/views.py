@@ -69,6 +69,11 @@ for df in (ALL_MEETINGS, ALL_MEETINGS_ONLINE, ALL_MEETINGS_INPERSON):
 	df['Duration'] = df['Duration'].dt.strftime('%H:%M')
 	df['Duration'] = df['Duration'].apply(lambda x: str(x)[1:] if str(x)[0] == '0' \
 									   	  else str(x))
+# UPDATED: 17-02-2024 -> filter out international meetings 
+ALL_MEETINGS = ALL_MEETINGS.loc[ALL_MEETINGS['intl']==0]
+ALL_MEETINGS_ONLINE = ALL_MEETINGS_ONLINE.loc[ALL_MEETINGS_ONLINE['intl']==0]
+ALL_MEETINGS_INPERSON = ALL_MEETINGS_INPERSON.loc[ALL_MEETINGS_INPERSON['intl']==0]
+# Read region data
 REGIONS = gp.read_file(REGION_FILE)
 
 
