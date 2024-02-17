@@ -10,7 +10,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="NA Meeting Picker">
     <meta name="author" content="Alec Zoeller">
-    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.png">
     {% block css %}
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
     <link rel="stylesheet" type="text/css" href="{% static 'modstyles.css' %}">   
@@ -210,8 +210,15 @@
             data: {'csrfmiddlewaretoken':"{{ csrf_token }}"},
             success: function(data) {
                 $("#venues").css("display", "none");
-                populateRegions(data, venue);
-                $("#regions").css("display", "grid");
+                if (venue == 'in-person' ) { //|| venue == 'online') {
+                    populateRegions(data, venue);
+                    $("#regions").css("display", "grid");
+                } else {
+                    sendRegion({id: 'SHOW ALL'}, 'online'); //For online meetings, skip region selection
+                    //$("#days").css("display", "grid");
+                    //To revert to allowing users to select a region for online meetings, replace if/else with the following:
+                    //populateRegions(data, venue); $("#regions").css("display", "grid");
+                }
                 $("#goback").css("display", "inline");
             }
         }); 
