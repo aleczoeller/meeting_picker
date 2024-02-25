@@ -26,13 +26,14 @@ import warnings
 warnings.filterwarnings('ignore', category=UserWarning)
 
 REGION_FILE = 'static/regions.shp'
-DAYS = {0: 'MONDAY',
-        1: 'TUESDAY',
-        2: 'WEDNESDAY',
-        3: 'THURSDAY',
-        4: 'FRIDAY',
-        5: 'SATURDAY',
-        6: 'SUNDAY'}
+DAYS = {0: 'SUNDAY',
+        1: 'MONDAY',
+        2: 'TUESDAY',
+        3: 'WEDNESDAY',
+        4: 'THURSDAY',
+        5: 'FRIDAY',
+        6: 'SATURDAY',
+        }
 USERNAME = getenv('DBUSER', None)
 PASSWORD = getenv('PASSWORD', None)
 HOSTNAME = getenv('HOSTNAME', None)
