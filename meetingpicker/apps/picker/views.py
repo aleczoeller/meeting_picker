@@ -24,6 +24,7 @@ from meetingpicker.apps.picker.models import PickerModel
 #Filter pandas warning about using a mysql connection directly
 import warnings
 warnings.filterwarnings('ignore', category=UserWarning)
+pd.options.mode.copy_on_write = True
 
 #Load environment variables from file (db connection parameters)
 load_dotenv(find_dotenv('../.env'), override=True)
@@ -129,6 +130,12 @@ def format_table(mtgs:pd.DataFrame) -> str:
 	# Limit columns to "for display" only
 	mtgs = mtgs[['Day', 'Meeting Name', 'Virtual', 'Location', 
 	      		 'Start Time', 'Duration', 'Formats']]
+	# Re-sort by day, then seconds into each day (for time)
+	mtgs['Ordering'] = mtgs.apply(lambda x: str(DAYS_ORDERED.get(x['Day'], 9999)) + \
+								 	str( int( (datetime.strptime(x['Start Time'], '%I:%M %p')\
+									- datetime(1900,1,1)).total_seconds() ) ), axis=1)
+	mtgs.sort_values(by='Ordering', inplace=True)
+	mtgs.drop('Ordering', axis=1, inplace=True)
 	#Format Table as HTML table for display
 	mtgs = mtgs.to_html(classes='table table-striped table-bordered table-hover', table_id='mtgs',
 		     			index=False, escape=False, render_links=True)	

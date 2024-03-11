@@ -70,6 +70,8 @@ This is how your environment variables can be set in cPanel's Python Apps sectio
 ![cPanel Environment Variables](resources/readme_envs.png)
 
 
+Go into refresh_meetings.sh script in root directory - replace path in line 8 to the python3.exe file in your virtualenv directory.  This should look like `export USEPYTHON='/home/nznaorg/virtualenv/repositories/meeting_picker/3.9/bin/python3'`. 
+ 
 ---
 
 ## Running Test Server ##
