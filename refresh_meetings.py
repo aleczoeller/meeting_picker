@@ -240,6 +240,7 @@ async def all_meetings_online(gm_future:asyncio.Future, amo_future:asyncio.Futur
                                     (GEO_MEETINGS['Virtual Meeting Link'] != ''))]
     amo_future.set_result(ALL_MEETINGS_ONLINE)
 
+
 async def all_meetings_inperson(gm_future:asyncio.Future, ami_future:asyncio.Future) -> asyncio.Future:
     """Asynchronous call to get all in-person meetings. Returns as a future.
 
@@ -274,6 +275,47 @@ async def run():
     loop.create_task(all_meetings_online(gm_future, amo_future))
     loop.create_task(all_meetings_inperson(gm_future, ami_future))
 
+
+def sort_on_day(series:Series) -> Series:
+	"""Sort a series of days in order of the week, starting with the current day.
+
+	Args:
+		series (Series): Pandas series
+
+	Returns:
+		Series: Pandas series, sorted
+	"""
+	return series.apply(lambda x: DAYS_ORDERED.get(x, 9999))
+
+
+async def process_meetings(ALL_MEETINGS,
+                           ALL_REGIONS,
+                           ALL_MEETINGS_ONLINE,
+                           ALL_MEETINGS_INPERSON,
+                           ):
+    """Combine region and meeting data
+    """
+    # Issue with geopandas formatting - ensure datetimes are in correct format
+    for df in (ALL_MEETINGS, ALL_MEETINGS_ONLINE, ALL_MEETINGS_INPERSON):
+        df['Start Time'] = pd.to_datetime(df['Start Time'], format='%H:%M:00')
+        # Roundabout method for sorting first on day of the week, THEN on time
+        df['DayTime'] = df.apply(lambda x: ((DAYS_ORDERED.get(x['Day'], 9999)+1)*10000) * \
+                                (86400 - (x['Start Time'] - datetime(1900,1,1)).seconds), 
+                                axis=1)
+        df.sort_values(by='DayTime', inplace=True)
+        df.drop('DayTime', axis=1, inplace=True)
+        df['Start Time'] = df['Start Time'].dt.strftime('%I:%M %p')
+        df['Start Time'] = df['Start Time'].apply(lambda x: str(x)[1:] if str(x)[0] == '0' \
+                                                else str(x))
+        df['Duration'] = pd.to_datetime(df['Duration'], format='%H:%M:00')
+        df['Duration'] = df['Duration'].dt.strftime('%H:%M')
+        df['Duration'] = df['Duration'].apply(lambda x: str(x)[1:] if str(x)[0] == '0' \
+                                            else str(x))
+    # UPDATED: 17-02-2024 -> filter out international meetings 
+    ALL_MEETINGS = ALL_MEETINGS.loc[ALL_MEETINGS['intl']==0]
+    ALL_MEETINGS_ONLINE = ALL_MEETINGS_ONLINE.loc[ALL_MEETINGS_ONLINE['intl']==0]
+    ALL_MEETINGS_INPERSON = ALL_MEETINGS_INPERSON.loc[ALL_MEETINGS_INPERSON['intl']==0]
+    
 
 async def save_all():
     """Wrapper function to save all async functions as global variables.

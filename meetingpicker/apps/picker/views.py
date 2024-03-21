@@ -1,30 +1,30 @@
 import calendar
-import pandas as pd
-from datetime import datetime, timedelta
-from os import getenv
+from pandas import options as pandas_options
+from pandas import ( DataFrame,
+					 to_datetime,
+					 isnull,
+					 Series,
+					 )
+from datetime import datetime
 from requests import request
 from typing import List, Union
 
-import asyncio
-import geopandas as gp
-import MySQLdb as mysql
-from asgiref.sync import sync_to_async
-from django.http import HttpResponse, JsonResponse, HttpResponseRedirect
+from geopandas import ( GeoDataFrame, 
+					    read_file,
+						sjoin,
+						)
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.views.generic import ListView
 from dotenv import load_dotenv, find_dotenv
-from shapely.geometry import Point
 
-from meetingpicker.utils.queries import (meeting_data_query,
-		 								meeting_main_query,
-		 								meeting_format_query,)
 from meetingpicker.apps.picker.models import PickerModel
 
 
 #Filter pandas warning about using a mysql connection directly
-import warnings
-warnings.filterwarnings('ignore', category=UserWarning)
-pd.options.mode.copy_on_write = True
+from warnings import filterwarnings
+filterwarnings('ignore', category=UserWarning)
+pandas_options.mode.copy_on_write = True
 
 #Load environment variables from file (db connection parameters)
 load_dotenv(find_dotenv('../.env'), override=True)
@@ -50,13 +50,13 @@ day_list = [*range(7)]
 DAYS_ORDERED = {i:j for i, j in zip(day_names, day_list)}
 
 # Read meeting data
-ALL_MEETINGS = gp.read_file('data/all_meetings_inperson.geojson')
-ALL_REGIONS = gp.read_file('data/all_regions.geojson')
-ALL_MEETINGS_ONLINE = gp.read_file('data/all_meetings_online.geojson')
-ALL_MEETINGS_INPERSON = gp.read_file('data/all_meetings_inperson.geojson')
+ALL_MEETINGS = read_file('data/all_meetings_inperson.geojson')
+ALL_REGIONS = read_file('data/all_regions.geojson')
+ALL_MEETINGS_ONLINE = read_file('data/all_meetings_online.geojson')
+ALL_MEETINGS_INPERSON = read_file('data/all_meetings_inperson.geojson')
 # Issue with geopandas formatting - ensure datetimes are in correct format
 for df in (ALL_MEETINGS, ALL_MEETINGS_ONLINE, ALL_MEETINGS_INPERSON):
-	df['Start Time'] = pd.to_datetime(df['Start Time'], format='%H:%M:00')
+	df['Start Time'] = to_datetime(df['Start Time'], format='%H:%M:00')
 	# Roundabout method for sorting first on day of the week, THEN on time
 	df['DayTime'] = df.apply(lambda x: ((DAYS_ORDERED.get(x['Day'], 9999)+1)*10000) * \
 						  	(86400 - (x['Start Time'] - datetime(1900,1,1)).seconds), 
@@ -66,7 +66,7 @@ for df in (ALL_MEETINGS, ALL_MEETINGS_ONLINE, ALL_MEETINGS_INPERSON):
 	df['Start Time'] = df['Start Time'].dt.strftime('%I:%M %p')
 	df['Start Time'] = df['Start Time'].apply(lambda x: str(x)[1:] if str(x)[0] == '0' \
 										   	  else str(x))
-	df['Duration'] = pd.to_datetime(df['Duration'], format='%H:%M:00')
+	df['Duration'] = to_datetime(df['Duration'], format='%H:%M:00')
 	df['Duration'] = df['Duration'].dt.strftime('%H:%M')
 	df['Duration'] = df['Duration'].apply(lambda x: str(x)[1:] if str(x)[0] == '0' \
 									   	  else str(x))
@@ -75,7 +75,9 @@ ALL_MEETINGS = ALL_MEETINGS.loc[ALL_MEETINGS['intl']==0]
 ALL_MEETINGS_ONLINE = ALL_MEETINGS_ONLINE.loc[ALL_MEETINGS_ONLINE['intl']==0]
 ALL_MEETINGS_INPERSON = ALL_MEETINGS_INPERSON.loc[ALL_MEETINGS_INPERSON['intl']==0]
 # Read region data
-REGIONS = gp.read_file(REGION_FILE)
+REGIONS = read_file(REGION_FILE)
+
+
 
 
 
@@ -84,14 +86,14 @@ class ProcessingError(Exception):
 	 pass  
 
 
-def format_table(mtgs:pd.DataFrame) -> str:
+def format_table(mtgs:DataFrame) -> str:
 	"""Take table of meetings and format for display.
 
 	Args:
-		mtgs (pd.DataFrame): DataFrame of meetings
+		mtgs (DataFrame): DataFrame of meetings
 
 	Returns:
-		pd.DataFrame: table for display
+		DataFrame: table for display
 	"""
 	mtgs.fillna('', inplace=True)
 	for col in mtgs:
@@ -142,20 +144,20 @@ def format_table(mtgs:pd.DataFrame) -> str:
 	return mtgs
 
 	
-def sort_on_day(series:pd.Series) -> pd.Series:
+def sort_on_day(series:Series) -> Series:
 	"""Sort a series of days in order of the week, starting with the current day.
 
 	Args:
-		series (pd.Series): Pandas series
+		series (Series): Pandas series
 
 	Returns:
-		pd.Series: Pandas series, sorted
+		Series: Pandas series, sorted
 	"""
 	return series.apply(lambda x: DAYS_ORDERED.get(x, 9999))
 
 
 def get_data(parameter:str = None,
-		     previous_parameters:Union[dict, str, int] = {}) -> Union[list, pd.DataFrame]:
+		     previous_parameters:Union[dict, str, int] = {}) -> Union[list, DataFrame]:
 	"""
 	Method to retrieve a table of meeting information, given a set of parameters to 
 	filter the data with.
@@ -167,7 +169,7 @@ def get_data(parameter:str = None,
 	
 	Returns:
 	
-	pd.DataFrame: table of meeting information 
+	DataFrame: table of meeting information 
 	
 	"""
 	# Create database conn and pull meeting data 
@@ -175,7 +177,7 @@ def get_data(parameter:str = None,
 		if previous_parameters['venue'] == 'in-person':
 			REGIONS.sort_values(by='id', inplace=True)
 			#Filter to just in-person meetings
-			meetings = ALL_MEETINGS.loc[(~pd.isnull(ALL_MEETINGS['Street Address'])) & \
+			meetings = ALL_MEETINGS.loc[(~isnull(ALL_MEETINGS['Street Address'])) & \
 			   						(ALL_MEETINGS['Street Address'] != '')]
 			if len(meetings) == 0:
 				return ['NONE']
@@ -185,7 +187,7 @@ def get_data(parameter:str = None,
 		elif previous_parameters['venue'] == 'online':
 			REGIONS.sort_values(by='id', inplace=True)
 			#Filter to just in-person meetings
-			meetings = ALL_MEETINGS.loc[(~pd.isnull(ALL_MEETINGS['Virtual Meeting Link'])) & \
+			meetings = ALL_MEETINGS.loc[(~isnull(ALL_MEETINGS['Virtual Meeting Link'])) & \
 			   						(ALL_MEETINGS['Virtual Meeting Link'] != '')]
 			if len(meetings) == 0:
 				return ['NONE']
@@ -204,51 +206,37 @@ def get_data(parameter:str = None,
 				meetings = ALL_MEETINGS_INPERSON.loc[ALL_MEETINGS_INPERSON['intl']==0][['Day', 'geometry']]
 			#Filter to just meetings in the region
 			if previous_parameters['region'] == 'SHOW ALL':
-				meetings = gp.sjoin(meetings, REGIONS)
+				meetings = sjoin(meetings, REGIONS)
 			else:
-				meetings = gp.sjoin(meetings, regions)
+				meetings = sjoin(meetings, regions)
 				del regions
 			meetings = meetings[['Day']]
 			meetings.sort_values(by='Day', key=sort_on_day, inplace=True)
 			days = meetings.Day.unique().tolist()
 			return ['SHOW ALL'] + days
 		elif previous_parameters['venue'] == 'online':
-			if not previous_parameters['region'] == 'SHOW ALL':
-				regions = REGIONS.loc[REGIONS['region']==previous_parameters['region']]
-				meetings = ALL_MEETINGS_ONLINE[['Day', 'geometry']]
-			else:
-				regions = REGIONS.loc[REGIONS['intl'].astype(int)==0]
-				meetings = ALL_MEETINGS_ONLINE.loc[ALL_MEETINGS_ONLINE['intl']==0][['Day', 'geometry']]
-			#Filter to just meetings in the region
-			if previous_parameters['region'] == 'SHOW ALL':
-				meetings = gp.sjoin(meetings, REGIONS)
-			elif regions is None or len(regions) == 0:
-				meetings = meetings.loc[meetings['region'] == 'not_real_value']
-			else:
-				meetings = gp.sjoin(meetings, regions)
-				del regions
-			meetings = meetings[['Day']]
+			meetings = meetings = ALL_MEETINGS.loc[(~isnull(ALL_MEETINGS['Virtual Meeting Link'])) & \
+			   						(ALL_MEETINGS['Virtual Meeting Link'] != '')][['Day']]
 			meetings.sort_values(by='Day', key=sort_on_day, inplace=True)
 			days = meetings.Day.unique().tolist()
 			return ['SHOW ALL'] + days
 		else:
 			raise ValueError('Invalid venue parameter')
-			
-
 	elif parameter == 'day':
 		if previous_parameters['region'] == 'SHOW ALL':
 			meetings = ALL_MEETINGS.loc[ALL_MEETINGS['intl']==0]
 			meetings.sort_values(by='Day', key=sort_on_day, inplace=True)
 			if previous_parameters['venue'] == 'online':
-				meetings = meetings.loc[(~pd.isnull(meetings['Virtual Meeting Link'])) & \
+				meetings = meetings.loc[(~isnull(meetings['Virtual Meeting Link'])) & \
 			    					    (meetings['Virtual Meeting Link'] != '')]
 			elif previous_parameters['venue'] == 'in-person':
-				meetings = meetings.loc[(~pd.isnull(meetings['Street Address'])) & \
+				meetings = meetings.loc[(~isnull(meetings['Street Address'])) & \
 			    						(meetings['Street Address'] != '')]
 			else:
 				raise ValueError('Invalid venue parameter')
 			#Filter to just meetings on a given day
 			if not previous_parameters['day'] == 'SHOW ALL':
+				meetings.to_csv('data/meetings.csv')
 				meetings = meetings.loc[meetings['Day'] == previous_parameters['day']]
 				meetings.drop(['geometry', 'Longitude', 'Latitude'], 
 		 				  axis=1, inplace=True, errors='ignore')
@@ -263,10 +251,10 @@ def get_data(parameter:str = None,
 				meetings = ALL_MEETINGS
 				meetings.sort_values(by='Day', key=sort_on_day, inplace=True)
 				if previous_parameters['venue'] == 'online':
-					meetings = meetings.loc[(~pd.isnull(meetings['Virtual Meeting Link'])) & \
+					meetings = meetings.loc[(~isnull(meetings['Virtual Meeting Link'])) & \
 											(meetings['Virtual Meeting Link'] != '')]
 				elif previous_parameters['venue'] == 'in-person':
-					meetings = meetings.loc[(~pd.isnull(meetings['Street Address'])) & \
+					meetings = meetings.loc[(~isnull(meetings['Street Address'])) & \
 											(meetings['Street Address'] != '')]
 				else:
 					raise ValueError('Invalid venue parameter')
@@ -280,17 +268,17 @@ def get_data(parameter:str = None,
 				meetings = ALL_MEETINGS
 				meetings.sort_values(by='Day', key=sort_on_day, inplace=True)
 				if previous_parameters['venue'] == 'online':
-					meetings = meetings.loc[(~pd.isnull(meetings['Virtual Meeting Link'])) & \
+					meetings = meetings.loc[(~isnull(meetings['Virtual Meeting Link'])) & \
 											(meetings['Virtual Meeting Link'] != '')]
 				elif previous_parameters['venue'] == 'in-person':
-					meetings = meetings.loc[(~pd.isnull(meetings['Street Address'])) & \
+					meetings = meetings.loc[(~isnull(meetings['Street Address'])) & \
 											(meetings['Street Address'] != '')]
 				else:
 					raise ValueError('Invalid venue parameter')
 				#Filter to just meetings in the region
 				meetings = meetings.loc[meetings['Day'] == previous_parameters['day']]
 				#Filter to just meetings in the region
-				meetings = gp.GeoDataFrame(meetings, crs='EPSG:4326', geometry='geometry')
+				meetings = GeoDataFrame(meetings, crs='EPSG:4326', geometry='geometry')
 				meetings = meetings.loc[meetings['geometry'].within(region)]
 				del region
 				meetings.drop(['geometry', 'Longitude', 'Latitude'], 
