@@ -1,5 +1,6 @@
 asgiref==3.7.2
 asttokens==2.2.1
+asyncio==3.4.3
 attrs==23.1.0
 backcall==0.2.0
 certifi==2023.5.7
@@ -10,6 +11,7 @@ cligj==0.7.2
 colorama==0.4.6
 decorator==5.1.1
 Django==4.2.3
+django-cors-headers==4.3.0
 executing==1.2.0
 Fiona==1.9.4.post1
 geopandas==0.13.2
