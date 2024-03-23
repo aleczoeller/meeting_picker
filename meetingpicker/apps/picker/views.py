@@ -181,12 +181,14 @@ def get_data(parameter:str = None,
 		else:
 			raise ValueError('Invalid venue parameter')
 	elif parameter == 'region':
+		this_region = previous_parameters['region'].replace('__', "'")\
+												   .replace('_', ' ')
 		if previous_parameters['venue'] == 'in-person':
 			#Filter to just meetings in the region
 			if previous_parameters['region'] == 'SHOW ALL':
 				meetings = ALL_MEETINGS
 			else:
-				meetings = ALL_MEETINGS.loc[ALL_MEETINGS['region'] == previous_parameters['region']]
+				meetings = ALL_MEETINGS.loc[ALL_MEETINGS['region'] == this_region]
 			meetings.sort_values(by='Day', key=sort_on_day, inplace=True)
 			days = meetings.Day.unique().tolist()
 			return ['SHOW ALL'] + days
@@ -198,6 +200,8 @@ def get_data(parameter:str = None,
 		else:
 			raise ValueError('Invalid venue parameter')
 	elif parameter == 'day':
+		this_region = previous_parameters['region'].replace('__', "'")\
+												   .replace('_', ' ')
 		if previous_parameters['region'] == 'SHOW ALL':
 			if previous_parameters['venue'] == 'online':
 				meetings = ALL_MEETINGS.loc[ALL_MEETINGS['venue'].isin(['online', 'hybrid'])]
@@ -230,7 +234,7 @@ def get_data(parameter:str = None,
 				#Filter to just meetings in the region
 				meetings = meetings.loc[meetings['Day'] == previous_parameters['day']]
 				#Filter to just meetings in the region
-				meetings = meetings.loc[meetings.region == previous_parameters['region']]
+				meetings = meetings.loc[meetings.region == this_region]
 				meetings.sort_values(by='Day', key=sort_on_day, inplace=True)
 				return meetings
 	else:
