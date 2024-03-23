@@ -125,9 +125,9 @@
                     if (j == 4) {  // Merge start time and duration values
                         cont = rows[i][j] + ", " + rows[i][j+1] + " hours";
                     }   else if (j == 1)    {  //Add label to meeting name
-                        cont = "MEETING NAME: " + rows[i][j];
+                        cont = "MEETING NAME: " + rows[i][j].replace('&lt;','<').replace('&gt;','>').replace('&amp;','&');
                     }   else {
-                        cont = rows[i][j].replace('&lt;','<').replace('&gt;','>');
+                        cont = rows[i][j].replace('&lt;','<').replace('&gt;','>').replace('&amp;','&');
                     }
                     if ((j != 2) & (j != 3)) {
                         new_content = document.createTextNode(cont);
@@ -226,6 +226,10 @@
     //Function to send region to server
     function sendRegion(button, venue) {
         var region = button.id;
+        if (region != "SHOW ALL") {
+            region = region.replace(" ", "_");
+            region = region.replace("'", "__");
+        }
         $.ajax({
             url: base_url + "/" + venue + "/" + region + "/nan/",
             type: "GET",

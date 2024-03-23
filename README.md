@@ -1,3 +1,7 @@
+# NA Meeting Picker App #
+
+Example site: [https://picker.nzna.org](https://picker.nzna.org)
+
 ## Getting Started with Local Development ##
 
  *Dependencies*
@@ -70,6 +74,8 @@ This is how your environment variables can be set in cPanel's Python Apps sectio
 ![cPanel Environment Variables](resources/readme_envs.png)
 
 
+Go into refresh_meetings.sh script in root directory - replace path in line 8 to the python3.exe file in your virtualenv directory.  This should look like `export USEPYTHON='/home/nznaorg/virtualenv/repositories/meeting_picker/3.9/bin/python3'`. 
+ 
 ---
 
 ## Running Test Server ##
@@ -101,6 +107,10 @@ In cPanel, go into the *Remote MySQL* section and enter the returned IP address,
 
 ## Considerations for Production ##
 
+- If you are embedding this app into a WordPress site, the recommendation is to deploy it to its own (new) subdomain.  For example, if you are deploying to nzna.org, you could create a subdomain like picker.nzna.org.  Access the subdirectory OF THE APP ITSELF in cPanel's File Manager, and edit the *.htaccess* file at the base of the subdomain's root/main folder.  Add the following line to allow your WordPress site to access the app as an iframe. Enter the url of the site that will be embedding the app in the place of "https://dev.nzna.org":
+```
+Header set Content-Security-Policy: frame-ancestors https://dev.nzna.org
+```
 - Create a cron job on your host server to refresh your meetings from the database source. Your credentials will be stored in the environments variables and/or .env file (if you have one).  The command to run is: `*/15 * * * * /home/nznaorg/repositories/meeting_picker/refresh_meetings.sh >> /home/nznaorg/repositories/meeting_picker/crontab.log 2>&1`  This will run the script every 15 minutes, and log the output to a file in the project's root directory.  To add a crontab, in the terminal on the host machine run `crontab -e` and paste the line at the bottom of the file.  Save and exit.
 - If you have cPanel as a part of your hosting environment, the Python Apps section can be an effective method for deployment.  Your initial configuration can look like this:
 ![cPanel Python App](resources/readme_setup.png)

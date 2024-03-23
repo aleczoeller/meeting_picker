@@ -2,6 +2,7 @@
 
 import asyncio
 import calendar
+import pytz
 from datetime import datetime, timedelta
 from os import getenv
 from typing import List, Union
@@ -26,13 +27,14 @@ import warnings
 warnings.filterwarnings('ignore', category=UserWarning)
 
 REGION_FILE = 'static/regions.shp'
-DAYS = {0: 'MONDAY',
-        1: 'TUESDAY',
-        2: 'WEDNESDAY',
-        3: 'THURSDAY',
-        4: 'FRIDAY',
-        5: 'SATURDAY',
-        6: 'SUNDAY'}
+DAYS = {0: 'SUNDAY',
+        1: 'MONDAY',
+        2: 'TUESDAY',
+        3: 'WEDNESDAY',
+        4: 'THURSDAY',
+        5: 'FRIDAY',
+        6: 'SATURDAY',
+        }
 USERNAME = getenv('DBUSER', None)
 PASSWORD = getenv('PASSWORD', None)
 HOSTNAME = getenv('HOSTNAME', None)
@@ -72,7 +74,11 @@ MEETING_MAIN_COLS = ['id_bigint',
                      'Latitude']
 
 # Rules for sorting tables 
-today = datetime.today()
+# Be VERY VERY careful - need to match timezone on your server with meetings
+# If not, meetings will be sorted incorrectly
+tz = pytz.timezone('Asia/Shanghai') # Full list from: pytz.all_timezones
+today = tz.localize(datetime.now()).astimezone(pytz.timezone('Pacific/Auckland'))\
+    .replace(tzinfo=None)
 weekday = calendar.weekday(today.year, today.month, today.day) 
 start_list = list(range(weekday, 7, 1))
 end_list = list(range(0, weekday))
@@ -239,6 +245,7 @@ async def all_meetings_online(gm_future:asyncio.Future, amo_future:asyncio.Futur
                                     (GEO_MEETINGS['Virtual Meeting Link'] != ''))]
     amo_future.set_result(ALL_MEETINGS_ONLINE)
 
+
 async def all_meetings_inperson(gm_future:asyncio.Future, ami_future:asyncio.Future) -> asyncio.Future:
     """Asynchronous call to get all in-person meetings. Returns as a future.
 
@@ -274,24 +281,105 @@ async def run():
     loop.create_task(all_meetings_inperson(gm_future, ami_future))
 
 
+def sort_on_day(series:pd.Series) -> pd.Series:
+	"""Sort a series of days in order of the week, starting with the current day.
+
+	Args:
+		series (pd.Series): Pandas series
+
+	Returns:
+		pd.Series: Pandas series, sorted
+	"""
+	return series.apply(lambda x: DAYS_ORDERED.get(x, 9999))
+
+
+async def process_meetings(ALL_MEETINGS,
+                           ALL_REGIONS,
+                           ALL_MEETINGS_ONLINE,
+                           ALL_MEETINGS_INPERSON,
+                           ):
+    """Combine region and meeting data
+    """
+    # Issue with geopandas formatting - ensure datetimes are in correct format
+    for df in (ALL_MEETINGS, ALL_MEETINGS_ONLINE, ALL_MEETINGS_INPERSON):
+        df['Start Time'] = pd.to_datetime(df['Start Time'], format='%H:%M:00')
+        # Roundabout method for sorting first on day of the week, THEN on time
+        df['DayTime'] = df.apply(lambda x: ((DAYS_ORDERED.get(x['Day'], 9999)+1)*10000) * \
+                                (86400 - (x['Start Time'] - datetime(1900,1,1)).seconds), 
+                                axis=1)
+        df.sort_values(by='DayTime', inplace=True)
+        df.drop('DayTime', axis=1, inplace=True)
+        df['Start Time'] = df['Start Time'].dt.strftime('%I:%M %p')
+        df['Start Time'] = df['Start Time'].apply(lambda x: str(x)[1:] if str(x)[0] == '0' \
+                                                else str(x))
+        df['Duration'] = pd.to_datetime(df['Duration'], format='%H:%M:00')
+        df['Duration'] = df['Duration'].dt.strftime('%H:%M')
+        df['Duration'] = df['Duration'].apply(lambda x: str(x)[1:] if str(x)[0] == '0' \
+                                            else str(x))
+    # UPDATED: 17-02-2024 -> filter out international meetings 
+    ALL_MEETINGS = ALL_MEETINGS.loc[ALL_MEETINGS['intl']==0]
+    ALL_MEETINGS_ONLINE = ALL_MEETINGS_ONLINE.loc[ALL_MEETINGS_ONLINE['intl']==0]
+    ALL_MEETINGS_INPERSON = ALL_MEETINGS_INPERSON.loc[ALL_MEETINGS_INPERSON['intl']==0]
+    
+
 async def save_all():
     """Wrapper function to save all async functions as global variables.
     """
     ALL_MEETINGS = await am_future
-    ALL_MEETINGS_ONLINE = await amo_future
-    ALL_MEETINGS_INPERSON = await ami_future
     ALL_REGIONS = await ar_future
-    GEO_MEETINGS = await gm_future
-    # Update to add international column to all meetings
-    ALL_MEETINGS = GEO_MEETINGS
-    # Save all dataframes to local file
-    ALL_MEETINGS.to_file('data/all_meetings.geojson', driver='GeoJSON')
-    ALL_MEETINGS_ONLINE.to_file('data/all_meetings_online.geojson', driver='GeoJSON')
-    ALL_MEETINGS_INPERSON.to_file('data/all_meetings_inperson.geojson', driver='GeoJSON')
-    ALL_REGIONS.to_file('data/all_regions.geojson', driver='GeoJSON')
+    # Rules for sorting tables 
+    today = datetime.today()
+    weekday = calendar.weekday(today.year, today.month, today.day) 
+    start_list = list(range(weekday, 7, 1))
+    end_list = list(range(0, weekday))
+    day_list = start_list + end_list 
+    day_names = [DAYS[i] for i in day_list]
+    day_list = [*range(7)]
+    DAYS_ORDERED = {i:j for i, j in zip(day_names, day_list)}
+    # Issue with geopandas formatting - ensure datetimes are in correct format
+    for df in (ALL_MEETINGS,):
+        df['Start Time'] = pd.to_datetime(df['Start Time'], format='%H:%M:00')
+        # Roundabout method for sorting first on day of the week, THEN on time
+        df['DayTime'] = df.apply(lambda x: ((DAYS_ORDERED.get(x['Day'], 9999)+1)*10000) * \
+                                (86400 - (x['Start Time'] - datetime(1900,1,1)).seconds), 
+                                axis=1)
+        df.sort_values(by='DayTime', inplace=True)
+        df.drop('DayTime', axis=1, inplace=True)
+        df['Start Time'] = df['Start Time'].dt.strftime('%I:%M %p')
+        df['Start Time'] = df['Start Time'].apply(lambda x: str(x)[1:] if str(x)[0] == '0' \
+                                                else str(x))
+        df['Duration'] = pd.to_datetime(df['Duration'], format='%H:%M')
+        df['Duration'] = df['Duration'].dt.strftime('%H:%M')
+        df['Duration'] = df['Duration'].apply(lambda x: str(x)[1:] if str(x)[0] == '0' \
+                                            else str(x))
+    # Read region data
+    REGIONS = gp.read_file(REGION_FILE)
+    ALL_MEETINGS = gp.sjoin(ALL_MEETINGS, REGIONS)
+    ALL_MEETINGS['venue'] = ''
+    ALL_MEETINGS.loc[(~pd.isnull(ALL_MEETINGS['Street Address'])) & \
+			   						(ALL_MEETINGS['Street Address'] != ''),
+                                    'venue'] = 'in-person'
+    ALL_MEETINGS.loc[((~pd.isnull(ALL_MEETINGS['Virtual Meeting Link'])) & \
+			   						(ALL_MEETINGS['Virtual Meeting Link'] != '')) & \
+                        (ALL_MEETINGS['venue'] != 'in-person'),
+                                    'venue'] = 'online'
+    ALL_MEETINGS.loc[((~pd.isnull(ALL_MEETINGS['Virtual Meeting Link'])) & \
+			   						(ALL_MEETINGS['Virtual Meeting Link'] != '')) & \
+                        (ALL_MEETINGS['venue'] != 'online'),
+                                    'venue'] = 'hybrid'
+    ALL_MEETINGS.sort_values(by='Day', key=sort_on_day, inplace=True)
+    ALL_MEETINGS.reset_index(drop=True, inplace=True)
+    # Only local meetings 
+    ALL_MEETINGS = ALL_MEETINGS.loc[ALL_MEETINGS['intl']==0]
+    # Drop unneeded columns
+    ALL_MEETINGS.drop(columns=['geometry', 'index_right', 'id', 
+                               'layer', 'path', 'intl', 'Longitude', 
+                               'Latitude'], axis=1, inplace=True)
+    ALL_MEETINGS.to_csv('data/all_meetings.csv', index=False)
 
 
 if __name__ == '__main__':
     asyncio.run(run())
     asyncio.run(save_all())
+
 
