@@ -220,6 +220,7 @@ def get_data(parameter:str = None,
 					meetings = ALL_MEETINGS.loc[ALL_MEETINGS['venue'].isin(['online', 'hybrid'])]
 				elif previous_parameters['venue'] == 'in-person':
 					meetings = ALL_MEETINGS.loc[ALL_MEETINGS['venue'].isin(['in-person', 'hybrid'])]
+					meetings = meetings.loc[meetings.region == this_region]
 				else:
 					raise ValueError('Invalid venue parameter')
 				meetings.sort_values(by='Day', key=sort_on_day, inplace=True)
