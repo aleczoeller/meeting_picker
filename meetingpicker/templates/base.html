@@ -1,9 +1,9 @@
 {% load static %}
-{% csrf_token %}
 
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    {% csrf_token %}
     <meta charset="utf-8">
     <meta http-equiv="x-ua-compatible" content="ie=edge">
     <title>{% block title %}Meeting Picker{% endblock %}</title>
@@ -23,7 +23,7 @@
   
   <body>
     {% block body %}
-    <container style="padding-top:10px;">
+    <container id="container-main" style="padding-top:10px;">
         <div class="alert alert-info" role="alert" style="font-size:14pt;">
             <strong>Find a Meeting</strong>
             <button id="goback" style="display:none; right:6px;" type="button"
@@ -66,6 +66,7 @@
             button.innerHTML = data.regions[i];
             regions.appendChild(button);
         }
+	postToParent();
     }
     //Create buttons for available days, given chosen venue and region
     function populateDays(data, region) {
@@ -84,6 +85,7 @@
             button.innerHTML = data.days[i];
             days.appendChild(button);
         }
+	postToParent();
     }
     // generate mobile version for each table
     function formatTable(table) {
@@ -149,7 +151,8 @@
                         newtable.innerHTML.replace('&lt;','<').replace('&gt;','>')
                             .replace('<tbody>','').replace('</tbody>', '') +
                         '</table';
-       return st_output;
+        postToParent();
+	return st_output;
     }
     //Function to send day to server
     function sendDay(button, region) {
@@ -164,7 +167,8 @@
                 mtgs = document.getElementById("meetings");
                 mtgs.innerHTML = formatTable(data.meetings);
                 mtgs.setAttribute("style", "display:block;");                
-            }
+            	postToParent();
+	    }
         });
     }
     //Function to start the process over
@@ -196,7 +200,8 @@
                 for (var i=0; i < regionsArr.length; i++) {
                     regionsArr[i].remove();
                 }
-            }
+            postToParent();
+	    }
 
         });
     }
@@ -220,6 +225,7 @@
                     //populateRegions(data, venue); $("#regions").css("display", "grid");
                 }
                 $("#goback").css("display", "inline");
+	        postToParent();
             }
         }); 
     }
@@ -238,9 +244,19 @@
                 $("#regions").css("display", "none");
                 populateDays(data, region);
                 $("#days").css("display", "grid");
+		postToParent();
             }
         });
     }
+  //If page is set in iframe, post messages to parent
+  function postToParent() {
+	  var cont = document.getElementById("container-main");
+	  var height = cont.offsetHeight + 100;
+	  parent.postMessage(parseInt(height), "*"); // any domain
+  }
+
+  window.addEventListener('load', postToParent);
+
 
   </script>
 
