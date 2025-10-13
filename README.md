@@ -1,6 +1,3 @@
-# NA Meeting Picker App #
-
-Example site: [https://picker.nzna.org](https://picker.nzna.org)
 
 ## Getting Started with Local Development ##
 
