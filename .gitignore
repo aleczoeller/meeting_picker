@@ -13,3 +13,5 @@ staticfiles/
 migrations/
 scratch.sql
 data/
+**/static/**
+static/**
