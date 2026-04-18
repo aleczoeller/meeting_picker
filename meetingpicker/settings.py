@@ -31,7 +31,8 @@ SECRET_KEY = os.getenv('DJANGO_SECRET')
 DEBUG = True if os.getenv('DEBUG') == 'True' else False
 
 ALLOWED_HOSTS =  ['dev.nzna.org', 'picker.nzna.org', '.nzna.org', '0.0.0.0', 
-                  '85.187.128.61', 'localhost', '127.0.0.1']
+                  '85.187.128.61', 'localhost', '127.0.0.1',
+                  'nzna.org', 'static.cloudflareinsights.com']
 
 
 # Application definition

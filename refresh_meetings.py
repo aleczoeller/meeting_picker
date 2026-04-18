@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 
+import os
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
+
 import asyncio
+import os
 import calendar
 import pytz
 from datetime import datetime, timedelta
@@ -26,7 +30,7 @@ load_dotenv(find_dotenv('.env'), override=True)
 import warnings
 warnings.filterwarnings('ignore', category=UserWarning)
 
-REGION_FILE = 'static/regions.shp'
+REGION_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static/regions.shp')
 DAYS = {0: 'SUNDAY',
         1: 'MONDAY',
         2: 'TUESDAY',
@@ -93,12 +97,8 @@ ALL_REGIONS = None
 ALL_MEETINGS_ONLINE = None
 ALL_MEETINGS_INPERSON = None
 GEO_MEETINGS = None
-# Variables for async futures
-am_future = None
-ar_future = None
-gm_future = None
-amo_future = None
-ami_future = None
+AR = None
+
 
 
 class ProcessingError(Exception):
@@ -123,7 +123,8 @@ def process_meeting_data(meeting_data:pd.DataFrame,
                                       values='data_string')
     meeting_data.reset_index(drop=False, inplace=True)
     # Re-organize columns and drop unnecessary ones
-    meeting_data = meeting_data[MEETING_DETAIL_COLS]
+    actual_meeting_cols = [i for i in MEETING_DETAIL_COLS if i in meeting_data.columns]
+    meeting_data = meeting_data[actual_meeting_cols]
     # Filter online meetings
     if online:
         meeting_data = meeting_data[~pd.isnull(meeting_data['Virtual Meeting Link'])]
@@ -184,7 +185,7 @@ def get_meeting_data(online:bool = False) -> pd.DataFrame:
     return meeting_data
 
 
-async def all_meetings(am_future:asyncio.Future) -> asyncio.Future:
+def all_meetings() -> None:
     """Asyncronous call to generate meeting dataframe. Returns as a future.
 
     Args:
@@ -194,13 +195,14 @@ async def all_meetings(am_future:asyncio.Future) -> asyncio.Future:
         asyncio.Future: future object, value is meeting dataframe
     """
     # GET ALL MEETING DATA. Perform once on page load and store in session
+    global ALL_MEETINGS
     ALL_MEETINGS = get_meeting_data(online=False)
     ALL_MEETINGS['geometry'] = [Point(i,j) for i, j in zip(ALL_MEETINGS['Longitude'].values,
                                                         ALL_MEETINGS['Latitude'].values)]
     ALL_MEETINGS = gp.GeoDataFrame(ALL_MEETINGS, crs='EPSG:4326', geometry='geometry')
-    am_future.set_result(ALL_MEETINGS)
 
-async def all_regions(ar_future:asyncio.Future) -> asyncio.Future:
+
+def all_regions() -> None:
     """Asynchronous call to generate all regions. Returns as a future.
 
     Args:
@@ -209,11 +211,12 @@ async def all_regions(ar_future:asyncio.Future) -> asyncio.Future:
     Returns:
         asyncio.Future: future object, value is all regions as shapely geometry
     """
+    global ALL_REGIONS
     ALL_REGIONS = gp.read_file(REGION_FILE).geometry.unary_union
     ALL_REGIONS = gp.GeoDataFrame(geometry=[ALL_REGIONS], crs='EPSG:4326')
-    ar_future.set_result(ALL_REGIONS)
 
-async def geo_meetings(am_future: asyncio.Future, gm_future:asyncio.Future) -> asyncio.Future:
+
+def geo_meetings() -> None:
     """Asynchronous call to get all meetings as geopandas dataframe. Returns as a future.
 
     Args:
@@ -222,16 +225,17 @@ async def geo_meetings(am_future: asyncio.Future, gm_future:asyncio.Future) -> a
     Returns:
         asyncio.Future: future object, value is all meetings as geopandas dataframe
     """
-    ALL_MEETINGS = await am_future
+    global ALL_MEETINGS
+    global AR
+    global GEO_MEETINGS
     AR = gp.read_file(REGION_FILE)
     AR = AR[['intl', 'geometry']]
     GEO_MEETINGS = gp.GeoDataFrame(ALL_MEETINGS, crs='EPSG:4326', geometry='geometry')
     # Join to add international column to GEO_MEETINGS
     GEO_MEETINGS = gp.sjoin(GEO_MEETINGS, AR)
     GEO_MEETINGS.drop(['index_right'], axis=1, inplace=True)
-    gm_future.set_result(GEO_MEETINGS)
 
-async def all_meetings_online(gm_future:asyncio.Future, amo_future:asyncio.Future) -> asyncio.Future:
+def all_meetings_online() -> None:
     """Asynchronous call to get all online meetings. Returns as a future.
     
     Args:
@@ -240,13 +244,12 @@ async def all_meetings_online(gm_future:asyncio.Future, amo_future:asyncio.Futur
     Returns:
         asyncio.Future: future object, value is all online meetings
     """
-    GEO_MEETINGS = await gm_future
+    global ALL_MEETINGS_ONLINE
     ALL_MEETINGS_ONLINE = GEO_MEETINGS[(~pd.isnull(GEO_MEETINGS['Virtual Meeting Link']) & \
                                     (GEO_MEETINGS['Virtual Meeting Link'] != ''))]
-    amo_future.set_result(ALL_MEETINGS_ONLINE)
 
 
-async def all_meetings_inperson(gm_future:asyncio.Future, ami_future:asyncio.Future) -> asyncio.Future:
+def all_meetings_inperson() -> None:
     """Asynchronous call to get all in-person meetings. Returns as a future.
 
     Args:
@@ -255,30 +258,19 @@ async def all_meetings_inperson(gm_future:asyncio.Future, ami_future:asyncio.Fut
     Returns:
         asyncio.Future: future object, value is all in-person meetings
     """
-    GEO_MEETINGS = await gm_future
     # Filter to just in-person meetings
+    global ALL_MEETINGS_INPERSON
     ALL_MEETINGS_INPERSON = GEO_MEETINGS[(~pd.isnull(GEO_MEETINGS['Street Address']) & \
                                         (GEO_MEETINGS['Street Address'] != ''))]
-    ami_future.set_result(ALL_MEETINGS_INPERSON)
     
 
-async def run():
-    # Call all asynchronous functions.
-    # Create future objects (that can be awaited in subsequent methods)
-    # and pass them to the async functions
-    loop = asyncio.get_running_loop()
-    global am_future, ar_future, gm_future, amo_future, ami_future, r_future
-    am_future = loop.create_future()
-    ar_future = loop.create_future()
-    gm_future = loop.create_future()
-    amo_future = loop.create_future()
-    ami_future = loop.create_future()
-    # Call all async functions
-    loop.create_task(all_meetings(am_future))
-    loop.create_task(all_regions(ar_future))
-    loop.create_task(geo_meetings(am_future, gm_future))
-    loop.create_task(all_meetings_online(gm_future, amo_future))
-    loop.create_task(all_meetings_inperson(gm_future, ami_future))
+def run():
+    #Call all functions in sequence
+    all_meetings()
+    all_regions()
+    geo_meetings()
+    all_meetings_online()
+    all_meetings_inperson()
 
 
 def sort_on_day(series:pd.Series) -> pd.Series:
@@ -293,7 +285,7 @@ def sort_on_day(series:pd.Series) -> pd.Series:
 	return series.apply(lambda x: DAYS_ORDERED.get(x, 9999))
 
 
-async def process_meetings(ALL_MEETINGS,
+def process_meetings(ALL_MEETINGS,
                            ALL_REGIONS,
                            ALL_MEETINGS_ONLINE,
                            ALL_MEETINGS_INPERSON,
@@ -322,11 +314,11 @@ async def process_meetings(ALL_MEETINGS,
     ALL_MEETINGS_INPERSON = ALL_MEETINGS_INPERSON.loc[ALL_MEETINGS_INPERSON['intl']==0]
     
 
-async def save_all():
+def save_all():
     """Wrapper function to save all async functions as global variables.
     """
-    ALL_MEETINGS = await am_future
-    ALL_REGIONS = await ar_future
+    global ALL_MEETINGS
+    global ALL_REGIONS
     # Rules for sorting tables 
     today = datetime.today()
     weekday = calendar.weekday(today.year, today.month, today.day) 
@@ -375,11 +367,15 @@ async def save_all():
     ALL_MEETINGS.drop(columns=['geometry', 'index_right', 'id', 
                                'layer', 'path', 'intl', 'Longitude', 
                                'Latitude'], axis=1, inplace=True)
-    ALL_MEETINGS.to_csv('data/all_meetings.csv', index=False)
+    ALL_MEETINGS.to_csv(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data/all_meetings.csv'), index=False)
 
 
 if __name__ == '__main__':
-    asyncio.run(run())
-    asyncio.run(save_all())
+    try:
+        run()
+        save_all()
+        print('Completed update on {}'.format(datetime.now().strftime('%m/%d/%Y %H:%M:%S')))
+    except Exception as e:
+        print(datetime.now().strftime('%m/%d/%Y %H:%M:%S') + ':', str(e))
 
 

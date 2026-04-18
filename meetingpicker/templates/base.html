@@ -251,7 +251,7 @@
   //If page is set in iframe, post messages to parent
   function postToParent() {
 	  var cont = document.getElementById("container-main");
-	  var height = cont.offsetHeight + 100;
+	  var height = cont.offsetHeight + 60;
 	  parent.postMessage(parseInt(height), "*"); // any domain
   }
 
